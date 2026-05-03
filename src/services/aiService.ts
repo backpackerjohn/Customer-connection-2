@@ -75,7 +75,7 @@ export async function processCustomerChat(
     - firstName: First name
     - middleInitial: Middle initial (if present on license)
     - lastName: Last name
-    - dob: Date of birth (format: YYYY-MM-DD or readable)
+    - dob: Date of birth (format: YYYY-MM-DD, ISO 8601)
     - phone: Phone number
     - email: Email address
     - address: Street address
@@ -84,21 +84,21 @@ export async function processCustomerChat(
     - zip: Zip code
     - dlNumber: Driver's license number
     - dlState: License state
-    - dlExpiration: License expiration date
+    - dlExpiration: License expiration date (format: YYYY-MM-DD, ISO 8601)
     - vehicleStock, vehicleYear, vehicleMake, vehicleModel, vehicleVin, vehicleMiles: Vehicle details
     - tradeYear, tradeMake, tradeModel, tradeTrim, tradeMileage, tradeVin: Trade-in details
     - insuranceCompany, agentName: Insurance details
     - stillOwe, lienholder, payoffAmount, monthlyPayment, monthsRemaining: Financial details
     - goalsMonthlyPayment, goalsMoneyDown, goalsCreditScore: Customer goals
     - status: Customer status ("active", "inactive", "lead")
-
-    RULES:
-    1. ONLY return the fields you are confident about.
-    2. DATA FORMATTING (CRITICAL):
-       - Name Fields: Proper Title Case. Middle Initial should be a single character if possible.
-       - Date Fields: Format as MM-DD-YYYY.
-       - Phone: (XXX) XXX-XXXX.
-       - State Fields: 2-letter uppercase code.
+ 
+     RULES:
+     1. ONLY return the fields you are confident about.
+     2. DATA FORMATTING (CRITICAL):
+        - Name Fields: Proper Title Case. Middle Initial should be a single character if possible.
+        - Date Fields (dob, dlExpiration): Format as YYYY-MM-DD (ISO 8601). The form uses native HTML date inputs which require this exact format. Example: 1985-04-17. Do NOT use MM/DD/YYYY or any other format.
+        - Phone: (XXX) XXX-XXXX.
+        - State Fields: 2-letter uppercase code.
        - VIN & Stock Numbers: ALL UPPERCASE.
        - Email: lowercase.
        - Address & City: Proper Title Case.
@@ -191,6 +191,38 @@ export async function processCustomerChat(
 
     const resultText = response.text || '{}';
     const parsedResult = JSON.parse(resultText);
+
+    // Defensive normalization: Ensure date fields are ISO YYYY-MM-DD
+    const toISODate = (input: any): string | undefined => {
+      if (typeof input !== 'string' || !input.trim()) return undefined;
+      const s = input.trim();
+      // Already ISO
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      // MM-DD-YYYY or MM/DD/YYYY
+      const m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+      if (m) {
+        const [, mm, dd, yyyy] = m;
+        return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+      }
+      // Fallback: try Date.parse
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().slice(0, 10);
+      }
+      return undefined;
+    };
+
+    if (parsedResult.updatedFields?.dob) {
+      const iso = toISODate(parsedResult.updatedFields.dob);
+      if (iso) parsedResult.updatedFields.dob = iso;
+      else delete parsedResult.updatedFields.dob;
+    }
+    if (parsedResult.updatedFields?.dlExpiration) {
+      const iso = toISODate(parsedResult.updatedFields.dlExpiration);
+      if (iso) parsedResult.updatedFields.dlExpiration = iso;
+      else delete parsedResult.updatedFields.dlExpiration;
+    }
+
     return parsedResult as ChatResponse;
   } catch (error) {
     console.error("AI Error:", error);

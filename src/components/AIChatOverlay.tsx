@@ -144,7 +144,7 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
         return acc;
       }, {} as any);
 
-      if ((Object.keys(cleanFields).length > 0 || response.hasGoodNotes) && !suggestionData) {
+      if (Object.keys(cleanFields).length > 0 || response.hasGoodNotes) {
         onFieldsExtracted(cleanFields, response.notesSummary);
       }
     } catch (error) {

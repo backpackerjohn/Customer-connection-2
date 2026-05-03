@@ -146,6 +146,7 @@ export default function App() {
   const [isDirty, setIsDirty] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [pendingAINotes, setPendingAINotes] = useState<string[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -157,14 +158,23 @@ export default function App() {
 
   // Auto-save effect
   useEffect(() => {
-    if (!isDirty || !user || !currentCustomer.firstName) return;
+    const hasAnyData = Boolean(
+      currentCustomer.firstName || currentCustomer.lastName || 
+      currentCustomer.phone || currentCustomer.email || 
+      currentCustomer.dlNumber || currentCustomer.vehicleVin ||
+      currentCustomer.address || currentCustomer.insuranceCompany
+    );
+
+    if (!isDirty || !user || !hasAnyData) return;
 
     setSaveStatus('idle'); // Just changed, wait for debounce
     const timeoutId = setTimeout(async () => {
       try {
         setSaveStatus('saving');
-        if (currentCustomer.id) {
-          const customerRef = doc(db, 'customers', currentCustomer.id);
+        let customerId = currentCustomer.id;
+
+        if (customerId) {
+          const customerRef = doc(db, 'customers', customerId);
           await updateDoc(customerRef, {
             ...currentCustomer,
             updatedAt: serverTimestamp()
@@ -176,8 +186,23 @@ export default function App() {
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           });
+          customerId = docRef.id;
           // Update current state with the new ID to prevent multiple creations
-          setCurrentCustomer(prev => ({ ...prev, id: docRef.id }));
+          setCurrentCustomer(prev => ({ ...prev, id: customerId }));
+
+          // BUG 5 FIX: Flush pending notes for the new customer
+          if (pendingAINotes.length > 0) {
+            const notesBatch = pendingAINotes.map(noteContent => 
+              addDoc(collection(db, 'customers', customerId!, 'notes'), {
+                content: noteContent,
+                type: 'ai',
+                authorId: user.uid,
+                createdAt: serverTimestamp()
+              })
+            );
+            await Promise.all(notesBatch);
+            setPendingAINotes([]);
+          }
         }
         setSaveStatus('synced');
         setIsDirty(false);
@@ -188,7 +213,7 @@ export default function App() {
     }, 2000);
 
     return () => clearTimeout(timeoutId);
-  }, [currentCustomer, isDirty, user]);
+  }, [currentCustomer, isDirty, user, pendingAINotes]);
 
   useEffect(() => {
     if (!user) return;
@@ -275,13 +300,19 @@ export default function App() {
       updateCustomer(fields);
     }
     
-    if (notesSummary && user && currentCustomer.id) {
-      addDoc(collection(db, 'customers', currentCustomer.id, 'notes'), {
-        content: notesSummary,
-        type: 'ai',
-        authorId: user.uid,
-        createdAt: serverTimestamp()
-      }).catch(err => handleFirestoreError(err, OperationType.WRITE, 'notes'));
+    if (notesSummary && user) {
+      if (currentCustomer.id) {
+        // Customer exists, write immediately
+        addDoc(collection(db, 'customers', currentCustomer.id, 'notes'), {
+          content: notesSummary,
+          type: 'ai',
+          authorId: user.uid,
+          createdAt: serverTimestamp()
+        }).catch(err => handleFirestoreError(err, OperationType.WRITE, `customers/${currentCustomer.id}/notes`));
+      } else {
+        // BUG 5 FIX: Buffer the note for the pending customer
+        setPendingAINotes(prev => [...prev, notesSummary]);
+      }
     }
   };
 

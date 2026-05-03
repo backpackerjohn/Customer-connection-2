@@ -65,6 +65,8 @@ export async function processCustomerChat(
     throw new Error("GEMINI_API_KEY is not set");
   }
 
+  const currentDataBlock = `\n\nCURRENT PROFILE STATE (for context — do not re-emit values that are already correct, but DO emit corrections or additions):\n${JSON.stringify(currentData ?? {}, null, 2)}`;
+
   const systemInstruction = `
     You are an expert data extraction assistant for a car dealership CRM.
     Your task is to take natural language input OR images (like driver's licenses, insurance cards, or vehicle VIN stickers) and map them to specific database fields.
@@ -72,7 +74,7 @@ export async function processCustomerChat(
     EXTRACT THESE FIELDS (use these exact keys):
     - firstName: First name
     - middleInitial: Middle initial (if present on license)
-    - lastName: Last name (split from full name if provided)
+    - lastName: Last name
     - dob: Date of birth (format: YYYY-MM-DD or readable)
     - phone: Phone number
     - email: Email address
@@ -83,10 +85,12 @@ export async function processCustomerChat(
     - dlNumber: Driver's license number
     - dlState: License state
     - dlExpiration: License expiration date
-    - vehicleYear, vehicleMake, vehicleModel, vehicleVin: Vehicle details
-    - tradeYear, tradeMake, tradeModel, tradeVin: Trade-in details
-    - insuranceCompany: Insurance provider
-    - agentName: Insurance agent name
+    - vehicleStock, vehicleYear, vehicleMake, vehicleModel, vehicleVin, vehicleMiles: Vehicle details
+    - tradeYear, tradeMake, tradeModel, tradeTrim, tradeMileage, tradeVin: Trade-in details
+    - insuranceCompany, agentName: Insurance details
+    - stillOwe, lienholder, payoffAmount, monthlyPayment, monthsRemaining: Financial details
+    - goalsMonthlyPayment, goalsMoneyDown, goalsCreditScore: Customer goals
+    - status: Customer status ("active", "inactive", "lead")
 
     RULES:
     1. ONLY return the fields you are confident about.
@@ -99,8 +103,10 @@ export async function processCustomerChat(
        - Email: lowercase.
        - Address & City: Proper Title Case.
     3. If an image is provided (like a Driver's License), prioritize extracting all legible facts from it (Name, DOB, Address, DL Number/State/Expiry).
-    4. Always return a 'message' field summarizing what you did (e.g., "I've extracted John's info from his driver's license").
-    5. 'hasGoodNotes' should be true if you found extra context not in the fields.
+    4. When an image is provided, perform full OCR and emit EVERY field you can read from it — do not stop after the first 2-3 fields.
+    5. Always return a 'message' field summarizing what you did (e.g., "I've extracted John's info from his driver's license").
+    6. 'hasGoodNotes' should be true if you found extra context not in the fields.
+    ${currentDataBlock}
   `;
 
   try {
@@ -110,7 +116,7 @@ export async function processCustomerChat(
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: [
         ...chatHistory,
         { role: 'user', parts: promptParts }
@@ -142,20 +148,42 @@ export async function processCustomerChat(
                 vehicleMake: { type: Type.STRING },
                 vehicleModel: { type: Type.STRING },
                 vehicleVin: { type: Type.STRING },
+                vehicleMiles: { type: Type.STRING },
                 insuranceCompany: { type: Type.STRING },
                 agentName: { type: Type.STRING },
                 hasTradeIn: { type: Type.BOOLEAN },
                 tradeYear: { type: Type.STRING },
                 tradeMake: { type: Type.STRING },
                 tradeModel: { type: Type.STRING },
-                tradeVin: { type: Type.STRING }
-              }
+                tradeTrim: { type: Type.STRING },
+                tradeMileage: { type: Type.STRING },
+                tradeVin: { type: Type.STRING },
+                stillOwe: { type: Type.BOOLEAN },
+                lienholder: { type: Type.STRING },
+                payoffAmount: { type: Type.STRING },
+                monthlyPayment: { type: Type.STRING },
+                monthsRemaining: { type: Type.STRING },
+                goalsMonthlyPayment: { type: Type.STRING },
+                goalsMoneyDown: { type: Type.STRING },
+                goalsCreditScore: { type: Type.STRING },
+                status: { type: Type.STRING, enum: ["active", "inactive", "lead"] }
+              },
+              propertyOrdering: [
+                "firstName", "middleInitial", "lastName", "dob", "phone", "email",
+                "address", "city", "state", "zip", "dlNumber", "dlState", "dlExpiration",
+                "vehicleStock", "vehicleYear", "vehicleMake", "vehicleModel", "vehicleVin", "vehicleMiles",
+                "insuranceCompany", "agentName", "hasTradeIn", "tradeYear", "tradeMake",
+                "tradeModel", "tradeTrim", "tradeMileage", "tradeVin", "stillOwe",
+                "lienholder", "payoffAmount", "monthlyPayment", "monthsRemaining",
+                "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "status"
+              ]
             },
             inventoryStockFound: { type: Type.STRING, description: "If a vehicle stock number is found in the text or image, put it here." },
             message: { type: Type.STRING },
             hasGoodNotes: { type: Type.BOOLEAN },
             notesSummary: { type: Type.STRING }
           },
+          propertyOrdering: ["updatedFields", "inventoryStockFound", "message", "hasGoodNotes", "notesSummary"],
           required: ["updatedFields", "message", "hasGoodNotes"]
         }
       }

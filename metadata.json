@@ -1,0 +1,9 @@
+{
+  "name": "Remix: Remix: customer connect 2",
+  "description": "A mobile-first customer management dashboard with real-time database support.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": []
+}

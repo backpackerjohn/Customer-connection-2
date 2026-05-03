@@ -1,0 +1,89 @@
+/**
+ * Normalizes an image for Gemini Vision processing.
+ * - Handles EXIF orientation (rotation).
+ * - Downscales if long edge > 1600px.
+ * - Converts to image/jpeg at 0.92 quality.
+ * - Returns raw base64 (without prefix) and mimeType.
+ */
+export async function normalizeImageForVision(file: File): Promise<{
+  base64: string;
+  mimeType: string;
+}> {
+  try {
+    let imgSource: TexImageSource | HTMLImageElement;
+
+    try {
+      // Modern approach: Handles EXIF rotation automatically
+      imgSource = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch (e) {
+      // Fallback for older browsers or if createImageBitmap fails
+      imgSource = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    const originalWidth = (imgSource as any).width || (imgSource as HTMLImageElement).naturalWidth;
+    const originalHeight = (imgSource as any).height || (imgSource as HTMLImageElement).naturalHeight;
+
+    let targetWidth = originalWidth;
+    let targetHeight = originalHeight;
+    const MAX_EDGE = 1600;
+
+    if (originalWidth > MAX_EDGE || originalHeight > MAX_EDGE) {
+      if (originalWidth > originalHeight) {
+        targetWidth = MAX_EDGE;
+        targetHeight = Math.round((originalHeight * MAX_EDGE) / originalWidth);
+      } else {
+        targetHeight = MAX_EDGE;
+        targetWidth = Math.round((originalWidth * MAX_EDGE) / originalHeight);
+      }
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      throw new Error('Could not get canvas context');
+    }
+
+    ctx.drawImage(imgSource, 0, 0, targetWidth, targetHeight);
+
+    // Clean up object URL if we used the fallback
+    if (!(imgSource instanceof ImageBitmap)) {
+      URL.revokeObjectURL((imgSource as HTMLImageElement).src);
+    } else {
+      imgSource.close(); // Close ImageBitmap to free resources
+    }
+
+    const base64DataWithPrefix = canvas.toDataURL('image/jpeg', 0.92);
+    const base64 = base64DataWithPrefix.split(',')[1];
+
+    return {
+      base64,
+      mimeType: 'image/jpeg'
+    };
+  } catch (error) {
+    console.error('Image normalization failed, falling back to original:', error);
+    
+    // Fallback: Convert original file to base64
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const res = reader.result as string;
+        resolve(res.split(',')[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    return {
+      base64,
+      mimeType: file.type as any // We know Gemini likes jpeg/png/heic/etc, but typing it as any for safety
+    };
+  }
+}

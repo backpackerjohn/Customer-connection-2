@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(data) {
+      return isSignedIn() && data.createdBy == request.auth.uid;
+    }
+
+    function isNoteAuthor(data) {
+      return isSignedIn() && data.authorId == request.auth.uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Customer Validation ---
+    function isValidCustomer(data) {
+      // Identity Integrity
+      return data.createdBy == request.auth.uid
+        && data.status in ['active', 'inactive', 'lead']
+        && data.hasTradeIn is bool
+        && data.stillOwe is bool
+        
+        // Type & Size Guards
+        && data.firstName is string && data.firstName.size() <= 100
+        && data.lastName is string && data.lastName.size() <= 100
+        && (data.get('middleInitial', '') is string && data.get('middleInitial', '').size() <= 10)
+        && (data.get('phone', '') is string && data.get('phone', '').size() <= 20)
+        && (data.get('email', '') is string && data.get('email', '').size() <= 200)
+        && (data.get('dob', '') is string && data.get('dob', '').size() <= 20)
+        && (data.get('address', '') is string && data.get('address', '').size() <= 200)
+        && (data.get('city', '') is string && data.get('city', '').size() <= 100)
+        && (data.get('state', '') is string && data.get('state', '').size() <= 50)
+        && (data.get('zip', '') is string && data.get('zip', '').size() <= 20)
+        && (data.get('dlNumber', '') is string && data.get('dlNumber', '').size() <= 50)
+        && (data.get('dlState', '') is string && data.get('dlState', '').size() <= 50)
+        && (data.get('dlExpiration', '') is string && data.get('dlExpiration', '').size() <= 20)
+        && (data.get('vehicleStock', '') is string && data.get('vehicleStock', '').size() <= 50)
+        && (data.get('vehicleYear', '') is string && data.get('vehicleYear', '').size() <= 10)
+        && (data.get('vehicleMake', '') is string && data.get('vehicleMake', '').size() <= 50)
+        && (data.get('vehicleModel', '') is string && data.get('vehicleModel', '').size() <= 50)
+        && (data.get('vehicleVin', '') is string && data.get('vehicleVin', '').size() <= 50)
+        && (data.get('vehicleMiles', '') is string && data.get('vehicleMiles', '').size() <= 20)
+        && (data.get('insuranceCompany', '') is string && data.get('insuranceCompany', '').size() <= 100)
+        && (data.get('agentName', '') is string && data.get('agentName', '').size() <= 100)
+        && (data.get('tradeYear', '') is string && data.get('tradeYear', '').size() <= 10)
+        && (data.get('tradeMake', '') is string && data.get('tradeMake', '').size() <= 50)
+        && (data.get('tradeModel', '') is string && data.get('tradeModel', '').size() <= 50)
+        && (data.get('tradeTrim', '') is string && data.get('tradeTrim', '').size() <= 50)
+        && (data.get('tradeMileage', '') is string && data.get('tradeMileage', '').size() <= 20)
+        && (data.get('tradeVin', '') is string && data.get('tradeVin', '').size() <= 50)
+        && (data.get('lienholder', '') is string && data.get('lienholder', '').size() <= 100)
+        && (data.get('payoffAmount', '') is string && data.get('payoffAmount', '').size() <= 20)
+        && (data.get('monthlyPayment', '') is string && data.get('monthlyPayment', '').size() <= 20)
+        && (data.get('monthsRemaining', '') is string && data.get('monthsRemaining', '').size() <= 20)
+        && (data.get('goalsMonthlyPayment', '') is string && data.get('goalsMonthlyPayment', '').size() <= 50)
+        && (data.get('goalsMoneyDown', '') is string && data.get('goalsMoneyDown', '').size() <= 20)
+        && (data.get('goalsCreditScore', '') is string && data.get('goalsCreditScore', '').size() <= 20);
+    }
+
+    function isValidNote(data) {
+      return data.content is string && data.content.size() <= 5000
+        && data.type in ['manual', 'ai', 'transcript']
+        && data.authorId == request.auth.uid;
+    }
+
+    // --- Collection Routes ---
+    match /customers/{customerId} {
+      allow get: if isValidId(customerId) && isOwner(existing());
+      allow list: if isSignedIn() && resource.data.createdBy == request.auth.uid;
+      
+      allow create: if isSignedIn() 
+        && isValidId(customerId)
+        && isValidCustomer(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && incoming().keys().hasAll(['firstName', 'lastName', 'status', 'hasTradeIn', 'stillOwe', 'createdBy', 'createdAt', 'updatedAt']);
+        
+      allow update: if isSignedIn()
+        && isValidId(customerId)
+        && isOwner(existing())
+        && isValidCustomer(incoming())
+        // Immutable check
+        && incoming().createdAt == existing().createdAt
+        && incoming().createdBy == existing().createdBy
+        // Action-Based Pattern
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'firstName', 'middleInitial', 'lastName', 'dob', 'phone', 'email', 'address', 'city', 'state', 'zip',
+            'dlNumber', 'dlState', 'dlExpiration', 'vehicleStock', 'vehicleYear', 'vehicleMake',
+            'vehicleModel', 'vehicleVin', 'vehicleMiles', 'insuranceCompany', 'agentName',
+            'hasTradeIn', 'tradeYear', 'tradeMake', 'tradeModel', 'tradeTrim', 'tradeMileage',
+            'tradeVin', 'stillOwe', 'lienholder', 'payoffAmount', 'monthlyPayment',
+            'monthsRemaining', 'goalsMonthlyPayment', 'goalsMoneyDown', 'goalsCreditScore', 'status', 'updatedAt'
+          ])
+        )
+        && incoming().updatedAt == request.time;
+
+      allow delete: if isValidId(customerId) && isOwner(existing());
+
+      // Notes Subcollection
+      match /notes/{noteId} {
+        allow list: if isSignedIn() && resource.data.authorId == request.auth.uid;
+        allow get: if isValidId(noteId) && isNoteAuthor(resource.data);
+        allow create: if isValidId(noteId) 
+          && isValidNote(incoming())
+          && get(/databases/$(database)/documents/customers/$(customerId)).data.createdBy == request.auth.uid
+          && incoming().createdAt == request.time;
+        allow update, delete: if isValidId(noteId) && isNoteAuthor(existing());
+      }
+    }
+  }
+}

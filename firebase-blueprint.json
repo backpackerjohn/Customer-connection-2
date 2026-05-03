@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "Customer": {
+      "title": "Customer",
+      "description": "A customer lead or active client profile.",
+      "type": "object",
+      "properties": {
+        "firstName": { "type": "string", "description": "Legal first name" },
+        "middleInitial": { "type": "string", "description": "Middle initial" },
+        "lastName": { "type": "string", "description": "Legal last name" },
+        "dob": { "type": "string", "format": "date", "description": "Date of birth" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "email": { "type": "string", "format": "email", "description": "Email address" },
+        "address": { "type": "string", "description": "Street address" },
+        "city": { "type": "string", "description": "City" },
+        "state": { "type": "string", "description": "State" },
+        "zip": { "type": "string", "description": "Zip code" },
+        "dlNumber": { "type": "string", "description": "Driver's license number" },
+        "dlState": { "type": "string", "description": "Driver's license state" },
+        "dlExpiration": { "type": "string", "format": "date", "description": "DL expiration date" },
+        "vehicleStock": { "type": "string", "description": "New vehicle stock number" },
+        "vehicleYear": { "type": "string", "description": "New vehicle year" },
+        "vehicleMake": { "type": "string", "description": "New vehicle make" },
+        "vehicleModel": { "type": "string", "description": "New vehicle model" },
+        "vehicleVin": { "type": "string", "description": "New vehicle VIN" },
+        "vehicleMiles": { "type": "string", "description": "New vehicle mileage" },
+        "insuranceCompany": { "type": "string", "description": "Insurance provider" },
+        "agentName": { "type": "string", "description": "Insurance agent name" },
+        "hasTradeIn": { "type": "boolean", "description": "Whether the customer is trading in a vehicle" },
+        "tradeYear": { "type": "string", "description": "Trade-in year" },
+        "tradeMake": { "type": "string", "description": "Trade-in make" },
+        "tradeModel": { "type": "string", "description": "Trade-in model" },
+        "tradeTrim": { "type": "string", "description": "Trade-in trim level" },
+        "tradeMileage": { "type": "string", "description": "Trade-in mileage" },
+        "tradeVin": { "type": "string", "description": "Trade-in VIN" },
+        "stillOwe": { "type": "boolean", "description": "Whether money is still owed on the trade-in" },
+        "lienholder": { "type": "string", "description": "Trade-in lienholder" },
+        "payoffAmount": { "type": "string", "description": "Payoff amount for trade-in" },
+        "monthlyPayment": { "type": "string", "description": "Current monthly payment for trade-in" },
+        "monthsRemaining": { "type": "string", "description": "Months remaining on trade-in loan" },
+        "goalsMonthlyPayment": { "type": "string", "description": "Desired monthly payment range" },
+        "goalsMoneyDown": { "type": "string", "description": "Down payment goal" },
+        "goalsCreditScore": { "type": "string", "description": "Estimated credit score" },
+        "status": { "type": "string", "enum": ["active", "inactive", "lead"], "description": "Current status of the profile" },
+        "createdBy": { "type": "string", "description": "UID of the user who created this customer" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when customer was created" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp when customer was last updated" }
+      },
+      "required": ["firstName", "lastName", "status", "hasTradeIn", "stillOwe", "createdBy", "createdAt", "updatedAt"]
+    },
+    "Note": {
+      "title": "Note",
+      "description": "A timestamped note or discovery about a customer.",
+      "type": "object",
+      "properties": {
+        "content": { "type": "string", "description": "The text of the note" },
+        "type": { "type": "string", "enum": ["manual", "ai", "transcript"], "description": "The source of the note" },
+        "authorId": { "type": "string", "description": "UID of the user who created the note" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["content", "type", "authorId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Collection of customer profiles created by users."
+    },
+    "/customers/{customerId}/notes/{noteId}": {
+      "schema": "Note",
+      "description": "Timeline of notes for a specific customer"
+    }
+  }
+}

@@ -19,7 +19,10 @@ import {
   Flag,
   FileText,
   ShieldAlert,
+  MessageCircle,
   Car,
+  CheckCircle,
+  SteeringWheel,
   Phone,
   MessageCircle
 } from 'lucide-react';
@@ -874,8 +877,8 @@ export default function App() {
                       label="Chat" 
                       onClick={() => setIsChatOpen(true)}
                     />
-                    <SubButton icon={<Camera size={20} />} label="Camera" />
-                    <SubButton icon={<Upload size={20} />} label="Upload" />
+                    <SubButton icon={<SteeringWheel size={20} />} label="Test Drive" />
+                    <SubButton icon={<CheckCircle size={20} />} label="Sold" />
                   </motion.div>
                 )}
                 {activeMenu === 'insights' && (

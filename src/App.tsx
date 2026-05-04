@@ -8,7 +8,6 @@ import {
   ChevronRight,
   ChevronLeft,
   User as UserIcon,
-  Save,
   MessageSquare, 
   Grid, 
   Camera, 
@@ -988,15 +987,6 @@ const Toggle = ({ active, onToggle }: { active: boolean, onToggle: () => void })
       animate={{ x: active ? 24 : 4 }}
       className="absolute top-1 left-0 w-4 h-4 bg-white rounded-full shadow-sm"
     />
-  </button>
-);
-
-const PlaceholderButton = ({ icon, label }: { icon: React.ReactNode, label: string }) => (
-  <button className="flex flex-col items-center gap-1 min-w-[56px] opacity-40 grayscale">
-    <div className="p-2 bg-gray-100 rounded-xl">
-      {icon}
-    </div>
-    <span className="text-[10px] font-bold uppercase tracking-tighter text-center leading-none">{label}</span>
   </button>
 );
 

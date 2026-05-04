@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, MessageSquare, User, Camera, Image as ImageIcon, Loader2, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { processCustomerChat, ChatResponse, ImageData } from '../services/aiService';
-import { lookupVehicleByStock, Vehicle } from '../services/inventoryService';
+import { processCustomerChat, ImageData } from '../services/aiService';
+import { lookupVehicleByStock } from '../services/inventoryService';
 import { normalizeImageForVision } from '../lib/imageNormalizer';
 
 interface Message {
@@ -144,6 +144,10 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
         return acc;
       }, {} as any);
 
+      if (response.inventoryStockFound && !cleanFields.vehicleStock) {
+        cleanFields.vehicleStock = response.inventoryStockFound;
+      }
+
       if (Object.keys(cleanFields).length > 0 || response.hasGoodNotes) {
         onFieldsExtracted(cleanFields, response.notesSummary);
       }
@@ -169,10 +173,6 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
     if (file) {
       handleSend(file);
     }
-  };
-
-  const triggerCamera = () => {
-    fileInputRef.current?.click();
   };
 
   return (

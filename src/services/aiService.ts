@@ -10,44 +10,6 @@ export interface ChatResponse {
   notesSummary?: string;
 }
 
-const customerSchemaDescription = `
-- firstName: string
-- lastName: string
-- dob: string (date)
-- phone: string
-- email: string (email)
-- address: string
-- city: string
-- state: string
-- zip: string
-- dlNumber: string
-- dlState: string
-- dlExpiration: string (date)
-- vehicleStock: string
-- vehicleYear: string
-- vehicleMake: string
-- vehicleModel: string
-- vehicleVin: string
-- vehicleMiles: string
-- insuranceCompany: string
-- agentName: string
-- hasTradeIn: boolean
-- tradeYear: string
-- tradeMake: string
-- tradeModel: string
-- tradeTrim: string
-- tradeMileage: string
-- tradeVin: string
-- stillOwe: boolean
-- lienholder: string
-- payoffAmount: string
-- monthlyPayment: string
-- monthsRemaining: string
-- goalsMonthlyPayment: string
-- goalsMoneyDown: string
-- goalsCreditScore: string
-`;
-
 export interface ImageData {
   inlineData: {
     data: string;

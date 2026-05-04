@@ -1,9 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { Customer } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 export interface ChatResponse {
-  updatedFields: Record<string, any>;
+  updatedFields: Record<string, unknown>;
   inventoryStockFound?: string;
   message: string;
   hasGoodNotes: boolean;
@@ -19,7 +20,7 @@ export interface ImageData {
 
 export async function processCustomerChat(
   userInput: string,
-  currentData: any,
+  currentData: Partial<Customer>,
   chatHistory: { role: 'user' | 'model', parts: { text: string }[] }[],
   image?: ImageData
 ): Promise<ChatResponse> {
@@ -72,7 +73,7 @@ export async function processCustomerChat(
   `;
 
   try {
-    const promptParts: any[] = [{ text: userInput }];
+    const promptParts: unknown[] = [{ text: userInput }];
     if (image) {
       promptParts.push(image);
     }
@@ -155,7 +156,7 @@ export async function processCustomerChat(
     const parsedResult = JSON.parse(resultText);
 
     // Defensive normalization: Ensure date fields are ISO YYYY-MM-DD
-    const toISODate = (input: any): string | undefined => {
+    const toISODate = (input: unknown): string | undefined => {
       if (typeof input !== 'string' || !input.trim()) return undefined;
       const s = input.trim();
       // Already ISO

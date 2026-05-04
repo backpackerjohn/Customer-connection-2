@@ -15,7 +15,7 @@ export async function normalizeImageForVision(file: File): Promise<{
     try {
       // Modern approach: Handles EXIF rotation automatically
       imgSource = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    } catch (e) {
+    } catch {
       // Fallback for older browsers or if createImageBitmap fails
       imgSource = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new Image();
@@ -25,8 +25,8 @@ export async function normalizeImageForVision(file: File): Promise<{
       });
     }
 
-    const originalWidth = (imgSource as any).width || (imgSource as HTMLImageElement).naturalWidth;
-    const originalHeight = (imgSource as any).height || (imgSource as HTMLImageElement).naturalHeight;
+    const originalWidth = (imgSource as HTMLImageElement).width || (imgSource as HTMLImageElement).naturalWidth || (imgSource as ImageBitmap).width;
+    const originalHeight = (imgSource as HTMLImageElement).height || (imgSource as HTMLImageElement).naturalHeight || (imgSource as ImageBitmap).height;
 
     let targetWidth = originalWidth;
     let targetHeight = originalHeight;
@@ -83,7 +83,7 @@ export async function normalizeImageForVision(file: File): Promise<{
 
     return {
       base64,
-      mimeType: file.type as any // We know Gemini likes jpeg/png/heic/etc, but typing it as any for safety
+      mimeType: file.type
     };
   }
 }

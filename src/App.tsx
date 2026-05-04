@@ -10,8 +10,6 @@ import {
   User as UserIcon,
   MessageSquare, 
   Grid, 
-  Camera, 
-  Upload,
   CarFront, 
   CreditCard,
   Sparkles,
@@ -22,9 +20,8 @@ import {
   MessageCircle,
   Car,
   CheckCircle,
-  SteeringWheel,
-  Phone,
-  MessageCircle
+  Gauge,
+  Phone
 } from 'lucide-react';
 import { 
   onAuthStateChanged, 
@@ -33,81 +30,16 @@ import {
   signOut,
   User 
 } from 'firebase/auth';
-import { 
-  collection, 
-  addDoc, 
-  serverTimestamp, 
-  query, 
-  where, 
-  onSnapshot,
-  updateDoc,
-  doc
-} from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
+import { auth, handleFirestoreError, OperationType } from './lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { AIChatOverlay } from './components/AIChatOverlay';
 
-// --- Types ---
-interface Customer {
-  id?: string;
-  firstName: string;
-  middleInitial?: string;
-  lastName: string;
-  dob?: string;
-  phone?: string;
-  email?: string;
-  address?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  dlNumber?: string;
-  dlState?: string;
-  dlExpiration?: string;
-  vehicleStock?: string;
-  vehicleYear?: string;
-  vehicleMake?: string;
-  vehicleModel?: string;
-  vehicleVin?: string;
-  vehicleMiles?: string;
-  insuranceCompany?: string;
-  agentName?: string;
-  hasTradeIn: boolean;
-  tradeYear?: string;
-  tradeMake?: string;
-  tradeModel?: string;
-  tradeTrim?: string;
-  tradeMileage?: string;
-  tradeVin?: string;
-  stillOwe: boolean;
-  lienholder?: string;
-  payoffAmount?: string;
-  monthlyPayment?: string;
-  monthsRemaining?: string;
-  goalsMonthlyPayment?: string;
-  goalsMoneyDown?: string;
-  goalsCreditScore?: string;
-  status: 'active' | 'inactive' | 'lead';
-  createdAt?: any;
-  updatedAt?: any;
-}
-
-interface Note {
-  id?: string;
-  content: string;
-  type: 'manual' | 'ai' | 'transcript';
-  authorId: string;
-  createdAt: any;
-}
-
-const emptyCustomer: Customer = {
-  firstName: '',
-  middleInitial: '',
-  lastName: '',
-  status: 'lead',
-  hasTradeIn: false,
-  stillOwe: false,
-};
+import { Customer, Note, emptyCustomer } from './types';
+import { 
+  createCustomer, updateCustomer, subscribeToCustomers 
+} from './services/customersService';
+import { createNote, subscribeToNotes } from './services/notesService';
 
 // --- Components ---
 
@@ -168,42 +100,30 @@ export default function App() {
     );
 
     if (!isDirty || !user || !hasAnyData) return;
-
-    setSaveStatus('idle'); // Just changed, wait for debounce
+    
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting status before debounce
+    setSaveStatus('idle'); 
     const timeoutId = setTimeout(async () => {
       try {
         setSaveStatus('saving');
         let customerId = currentCustomer.id;
 
         if (customerId) {
-          const customerRef = doc(db, 'customers', customerId);
-          const { id, ...customerData } = currentCustomer;
-          await updateDoc(customerRef, {
-            ...customerData,
-            updatedAt: serverTimestamp()
-          });
+          await updateCustomer(customerId, currentCustomer);
         } else {
-          const docRef = await addDoc(collection(db, 'customers'), {
-            ...currentCustomer,
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          });
-          customerId = docRef.id;
+          customerId = await createCustomer(user.uid, currentCustomer);
           // Update current state with the new ID to prevent multiple creations
           setCurrentCustomer(prev => ({ ...prev, id: customerId }));
 
           // BUG 5 FIX: Flush pending notes for the new customer
           if (pendingAINotes.length > 0) {
-            const notesBatch = pendingAINotes.map(noteContent => 
-              addDoc(collection(db, 'customers', customerId!, 'notes'), {
-                content: noteContent,
-                type: 'ai',
-                authorId: user.uid,
-                createdAt: serverTimestamp()
+            await Promise.all(pendingAINotes.map(content => 
+              createNote(customerId!, {
+                content, 
+                type: 'ai', 
+                authorId: user.uid
               })
-            );
-            await Promise.all(notesBatch);
+            ));
             setPendingAINotes([]);
           }
         }
@@ -221,17 +141,11 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    const q = query(
-      collection(db, 'customers'),
-      where('createdBy', '==', user.uid)
+    const unsubscribe = subscribeToCustomers(
+      user.uid,
+      setCustomers,
+      (error) => handleFirestoreError(error, OperationType.LIST, 'customers')
     );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-      setCustomers(data);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'customers');
-    });
 
     return unsubscribe;
   }, [user]);
@@ -239,25 +153,17 @@ export default function App() {
   // Fetch notes for current customer
   useEffect(() => {
     if (!user || !currentCustomer.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting notes when customer changes
       setNotes([]);
       return;
     }
 
-    const q = query(
-      collection(db, 'customers', currentCustomer.id, 'notes'),
-      where('authorId', '==', user.uid)
+    const unsubscribe = subscribeToNotes(
+      currentCustomer.id,
+      user.uid,
+      setNotes,
+      (error) => handleFirestoreError(error, OperationType.LIST, `customers/${currentCustomer.id}/notes`)
     );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      } as Note));
-      // Sort by descending date
-      setNotes(data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `customers/${currentCustomer.id}/notes`);
-    });
 
     return unsubscribe;
   }, [user, currentCustomer.id]);
@@ -276,7 +182,7 @@ export default function App() {
     setView('profile');
   };
 
-  const updateCustomer = (updates: Partial<Customer>) => {
+  const updateCustomerState = (updates: Partial<Customer>) => {
     setCurrentCustomer(prev => ({ ...prev, ...updates }));
     setIsDirty(true);
     setSaveStatus('idle');
@@ -286,11 +192,10 @@ export default function App() {
     if (!user || !currentCustomer.id || !newNote.trim()) return;
 
     try {
-      await addDoc(collection(db, 'customers', currentCustomer.id, 'notes'), {
+      await createNote(currentCustomer.id, {
         content: newNote.trim(),
         type: 'manual',
-        authorId: user.uid,
-        createdAt: serverTimestamp()
+        authorId: user.uid
       });
       setNewNote('');
     } catch (error) {
@@ -298,19 +203,18 @@ export default function App() {
     }
   };
 
-  const handleAIFieldsExtracted = (fields: any, notesSummary?: string) => {
+  const handleAIFieldsExtracted = (fields: Record<string, unknown>, notesSummary?: string) => {
     if (Object.keys(fields).length > 0) {
-      updateCustomer(fields);
+      updateCustomerState(fields);
     }
     
     if (notesSummary && user) {
       if (currentCustomer.id) {
         // Customer exists, write immediately
-        addDoc(collection(db, 'customers', currentCustomer.id, 'notes'), {
+        createNote(currentCustomer.id, {
           content: notesSummary,
           type: 'ai',
-          authorId: user.uid,
-          createdAt: serverTimestamp()
+          authorId: user.uid
         }).catch(err => handleFirestoreError(err, OperationType.WRITE, `customers/${currentCustomer.id}/notes`));
       } else {
         // BUG 5 FIX: Buffer the note for the pending customer
@@ -454,21 +358,21 @@ export default function App() {
                       <InputField 
                         label="First Name" 
                         value={currentCustomer.firstName} 
-                        onChange={v => updateCustomer({ firstName: v })} 
+                        onChange={v => updateCustomerState({ firstName: v })} 
                       />
                     </div>
                     <div className="col-span-1">
                       <InputField 
                         label="M.I." 
                         value={currentCustomer.middleInitial || ''} 
-                        onChange={v => updateCustomer({ middleInitial: v })} 
+                        onChange={v => updateCustomerState({ middleInitial: v })} 
                       />
                     </div>
                     <div className="col-span-2">
                       <InputField 
                         label="Last Name" 
                         value={currentCustomer.lastName} 
-                        onChange={v => updateCustomer({ lastName: v })} 
+                        onChange={v => updateCustomerState({ lastName: v })} 
                       />
                     </div>
                   </div>
@@ -477,44 +381,44 @@ export default function App() {
                       label="Date of Birth" 
                       type="date"
                       value={currentCustomer.dob} 
-                      onChange={v => updateCustomer({ dob: v })} 
+                      onChange={v => updateCustomerState({ dob: v })} 
                     />
                     <InputField 
                       label="Phone" 
                       type="tel"
                       value={currentCustomer.phone} 
-                      onChange={v => updateCustomer({ phone: v })} 
+                      onChange={v => updateCustomerState({ phone: v })} 
                     />
                   </div>
                   <InputField 
                     label="Email" 
                     type="email"
                     value={currentCustomer.email} 
-                    onChange={v => updateCustomer({ email: v })} 
+                    onChange={v => updateCustomerState({ email: v })} 
                   />
                   <div className="space-y-4 pt-4 border-t border-gray-50">
                     <InputField 
                       label="Street Address" 
                       value={currentCustomer.address} 
-                      onChange={v => updateCustomer({ address: v })} 
+                      onChange={v => updateCustomerState({ address: v })} 
                     />
                     <div className="grid grid-cols-3 gap-4">
                       <div className="col-span-1">
                         <InputField 
                           label="City" 
                           value={currentCustomer.city} 
-                          onChange={v => updateCustomer({ city: v })} 
+                          onChange={v => updateCustomerState({ city: v })} 
                         />
                       </div>
                       <InputField 
                         label="State" 
                         value={currentCustomer.state} 
-                        onChange={v => updateCustomer({ state: v })} 
+                        onChange={v => updateCustomerState({ state: v })} 
                       />
                       <InputField 
                         label="Zip" 
                         value={currentCustomer.zip} 
-                        onChange={v => updateCustomer({ zip: v })} 
+                        onChange={v => updateCustomerState({ zip: v })} 
                       />
                     </div>
                   </div>
@@ -522,19 +426,19 @@ export default function App() {
                     <InputField 
                       label="Driver's License Number" 
                       value={currentCustomer.dlNumber} 
-                      onChange={v => updateCustomer({ dlNumber: v })} 
+                      onChange={v => updateCustomerState({ dlNumber: v })} 
                     />
                     <div className="grid grid-cols-2 gap-4">
                       <InputField 
                         label="DL State" 
                         value={currentCustomer.dlState} 
-                        onChange={v => updateCustomer({ dlState: v })} 
+                        onChange={v => updateCustomerState({ dlState: v })} 
                       />
                       <InputField 
                         label="DL Expiration" 
                         type="date"
                         value={currentCustomer.dlExpiration} 
-                        onChange={v => updateCustomer({ dlExpiration: v })} 
+                        onChange={v => updateCustomerState({ dlExpiration: v })} 
                       />
                     </div>
                   </div>
@@ -553,12 +457,12 @@ export default function App() {
                   <InputField 
                     label="Insurance Company" 
                     value={currentCustomer.insuranceCompany} 
-                    onChange={v => updateCustomer({ insuranceCompany: v })} 
+                    onChange={v => updateCustomerState({ insuranceCompany: v })} 
                   />
                   <InputField 
                     label="Agent Name" 
                     value={currentCustomer.agentName} 
-                    onChange={v => updateCustomer({ agentName: v })} 
+                    onChange={v => updateCustomerState({ agentName: v })} 
                   />
                 </div>
               </section>
@@ -576,36 +480,36 @@ export default function App() {
                     <InputField 
                       label="Stock #" 
                       value={currentCustomer.vehicleStock} 
-                      onChange={v => updateCustomer({ vehicleStock: v })} 
+                      onChange={v => updateCustomerState({ vehicleStock: v })} 
                     />
                     <InputField 
                       label="Year" 
                       value={currentCustomer.vehicleYear} 
-                      onChange={v => updateCustomer({ vehicleYear: v })} 
+                      onChange={v => updateCustomerState({ vehicleYear: v })} 
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <InputField 
                       label="Make" 
                       value={currentCustomer.vehicleMake} 
-                      onChange={v => updateCustomer({ vehicleMake: v })} 
+                      onChange={v => updateCustomerState({ vehicleMake: v })} 
                     />
                     <InputField 
                       label="Model" 
                       value={currentCustomer.vehicleModel} 
-                      onChange={v => updateCustomer({ vehicleModel: v })} 
+                      onChange={v => updateCustomerState({ vehicleModel: v })} 
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <InputField 
                       label="VIN" 
                       value={currentCustomer.vehicleVin} 
-                      onChange={v => updateCustomer({ vehicleVin: v })} 
+                      onChange={v => updateCustomerState({ vehicleVin: v })} 
                     />
                     <InputField 
                       label="Miles" 
                       value={currentCustomer.vehicleMiles} 
-                      onChange={v => updateCustomer({ vehicleMiles: v })} 
+                      onChange={v => updateCustomerState({ vehicleMiles: v })} 
                     />
                   </div>
                 </div>
@@ -624,7 +528,7 @@ export default function App() {
                     <span className="font-semibold text-gray-700">Has trade-in?</span>
                     <Toggle 
                       active={currentCustomer.hasTradeIn} 
-                      onToggle={() => updateCustomer({ hasTradeIn: !currentCustomer.hasTradeIn })} 
+                      onToggle={() => updateCustomerState({ hasTradeIn: !currentCustomer.hasTradeIn })} 
                     />
                   </div>
 
@@ -638,36 +542,36 @@ export default function App() {
                         <InputField 
                           label="Year" 
                           value={currentCustomer.tradeYear} 
-                          onChange={v => updateCustomer({ tradeYear: v })} 
+                          onChange={v => updateCustomerState({ tradeYear: v })} 
                         />
                         <InputField 
                           label="Make" 
                           value={currentCustomer.tradeMake} 
-                          onChange={v => updateCustomer({ tradeMake: v })} 
+                          onChange={v => updateCustomerState({ tradeMake: v })} 
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <InputField 
                           label="Model" 
                           value={currentCustomer.tradeModel} 
-                          onChange={v => updateCustomer({ tradeModel: v })} 
+                          onChange={v => updateCustomerState({ tradeModel: v })} 
                         />
                         <InputField 
                           label="Trim" 
                           value={currentCustomer.tradeTrim} 
-                          onChange={v => updateCustomer({ tradeTrim: v })} 
+                          onChange={v => updateCustomerState({ tradeTrim: v })} 
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <InputField 
                           label="Mileage" 
                           value={currentCustomer.tradeMileage} 
-                          onChange={v => updateCustomer({ tradeMileage: v })} 
+                          onChange={v => updateCustomerState({ tradeMileage: v })} 
                         />
                         <InputField 
                           label="VIN" 
                           value={currentCustomer.tradeVin} 
-                          onChange={v => updateCustomer({ tradeVin: v })} 
+                          onChange={v => updateCustomerState({ tradeVin: v })} 
                         />
                       </div>
 
@@ -676,7 +580,7 @@ export default function App() {
                           <span className="font-semibold text-gray-700">Still owe on it?</span>
                           <Toggle 
                             active={currentCustomer.stillOwe} 
-                            onToggle={() => updateCustomer({ stillOwe: !currentCustomer.stillOwe })} 
+                            onToggle={() => updateCustomerState({ stillOwe: !currentCustomer.stillOwe })} 
                           />
                         </div>
 
@@ -689,24 +593,24 @@ export default function App() {
                             <InputField 
                               label="Lienholder" 
                               value={currentCustomer.lienholder} 
-                              onChange={v => updateCustomer({ lienholder: v })} 
+                              onChange={v => updateCustomerState({ lienholder: v })} 
                             />
                             <div className="grid grid-cols-2 gap-4">
                               <InputField 
                                 label="Payoff Amount" 
                                 value={currentCustomer.payoffAmount} 
-                                onChange={v => updateCustomer({ payoffAmount: v })} 
+                                onChange={v => updateCustomerState({ payoffAmount: v })} 
                               />
                               <InputField 
                                 label="Monthly Payment" 
                                 value={currentCustomer.monthlyPayment} 
-                                onChange={v => updateCustomer({ monthlyPayment: v })} 
+                                onChange={v => updateCustomerState({ monthlyPayment: v })} 
                               />
                             </div>
                             <InputField 
                               label="Months Remaining" 
                               value={currentCustomer.monthsRemaining} 
-                              onChange={v => updateCustomer({ monthsRemaining: v })} 
+                              onChange={v => updateCustomerState({ monthsRemaining: v })} 
                             />
                           </motion.div>
                         )}
@@ -729,20 +633,20 @@ export default function App() {
                     label="Monthly Payment Range" 
                     placeholder="e.g. $400 - $500"
                     value={currentCustomer.goalsMonthlyPayment} 
-                    onChange={v => updateCustomer({ goalsMonthlyPayment: v })} 
+                    onChange={v => updateCustomerState({ goalsMonthlyPayment: v })} 
                   />
                   <div className="grid grid-cols-2 gap-4">
                     <InputField 
                       label="Money Down" 
                       placeholder="$"
                       value={currentCustomer.goalsMoneyDown} 
-                      onChange={v => updateCustomer({ goalsMoneyDown: v })} 
+                      onChange={v => updateCustomerState({ goalsMoneyDown: v })} 
                     />
                     <InputField 
                       label="Estimated Credit Score" 
                       placeholder="e.g. 720"
                       value={currentCustomer.goalsCreditScore} 
-                      onChange={v => updateCustomer({ goalsCreditScore: v })} 
+                      onChange={v => updateCustomerState({ goalsCreditScore: v })} 
                     />
                   </div>
                 </div>
@@ -877,7 +781,7 @@ export default function App() {
                       label="Chat" 
                       onClick={() => setIsChatOpen(true)}
                     />
-                    <SubButton icon={<SteeringWheel size={20} />} label="Test Drive" />
+                    <SubButton icon={<Gauge size={20} />} label="Test Drive" />
                     <SubButton icon={<CheckCircle size={20} />} label="Sold" />
                   </motion.div>
                 )}

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { processCustomerChat, ImageData } from '../services/aiService';
 import { lookupVehicleByStock } from '../services/inventoryService';
 import { normalizeImageForVision } from '../lib/imageNormalizer';
+import { Customer } from '../types';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -12,15 +13,15 @@ interface Message {
   suggestion?: {
     label: string;
     action: () => void;
-    data: any;
+    data: Record<string, unknown>;
   };
 }
 
 interface AIChatOverlayProps {
   isOpen: boolean;
   onClose: () => void;
-  currentCustomer: any;
-  onFieldsExtracted: (fields: any, notesSummary?: string) => void;
+  currentCustomer: Customer;
+  onFieldsExtracted: (fields: Record<string, unknown>, notesSummary?: string) => void;
 }
 
 export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({ 
@@ -89,7 +90,7 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
       
       // Map history to Gemini format
       const history = messages.slice(1).map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user' as any,
+        role: (m.role === 'assistant' ? 'model' : 'user') as 'model' | 'user',
         parts: [{ text: m.content }]
       }));
 
@@ -97,7 +98,7 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
       console.log("AI Response received:", response);
       
       let finalMessage = response.message;
-      let suggestionData: any = null;
+      let suggestionData: { label: string; data: Record<string, unknown> } | null = null;
 
       // Handle Inventory Lookup if stock found
       if (response.inventoryStockFound) {
@@ -142,7 +143,7 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
           acc[key] = value;
         }
         return acc;
-      }, {} as any);
+      }, {} as Record<string, unknown>);
 
       if (response.inventoryStockFound && !cleanFields.vehicleStock) {
         cleanFields.vehicleStock = response.inventoryStockFound;

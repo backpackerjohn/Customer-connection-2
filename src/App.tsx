@@ -174,8 +174,9 @@ export default function App() {
 
         if (customerId) {
           const customerRef = doc(db, 'customers', customerId);
+          const { id, ...customerData } = currentCustomer;
           await updateDoc(customerRef, {
-            ...currentCustomer,
+            ...customerData,
             updatedAt: serverTimestamp()
           });
         } else {

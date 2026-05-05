@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Customer } from "../types";
+import { toISODate } from '../lib/dateNormalizer';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
@@ -154,26 +155,6 @@ export async function processCustomerChat(
 
     const resultText = response.text || '{}';
     const parsedResult = JSON.parse(resultText);
-
-    // Defensive normalization: Ensure date fields are ISO YYYY-MM-DD
-    const toISODate = (input: unknown): string | undefined => {
-      if (typeof input !== 'string' || !input.trim()) return undefined;
-      const s = input.trim();
-      // Already ISO
-      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-      // MM-DD-YYYY or MM/DD/YYYY
-      const m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
-      if (m) {
-        const [, mm, dd, yyyy] = m;
-        return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
-      }
-      // Fallback: try Date.parse
-      const d = new Date(s);
-      if (!isNaN(d.getTime())) {
-        return d.toISOString().slice(0, 10);
-      }
-      return undefined;
-    };
 
     if (parsedResult.updatedFields?.dob) {
       const iso = toISODate(parsedResult.updatedFields.dob);

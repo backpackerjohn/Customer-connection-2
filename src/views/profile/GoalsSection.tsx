@@ -1,0 +1,44 @@
+import React from 'react';
+import { Flag } from 'lucide-react';
+import { Customer } from '../../types';
+import { InputField } from '../../components/InputField';
+
+interface Props {
+  customer: Customer;
+  onChange: (patch: Partial<Customer>) => void;
+}
+
+export function GoalsSection({ customer, onChange }: Props) {
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center gap-2 px-2">
+        <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
+          <Flag size={18} />
+        </div>
+        <h2 className="text-xl font-bold">Goals</h2>
+      </div>
+      <div className="card p-6 space-y-6">
+        <InputField 
+          label="Monthly Payment Range" 
+          placeholder="e.g. $400 - $500"
+          value={customer.goalsMonthlyPayment} 
+          onChange={v => onChange({ goalsMonthlyPayment: v })} 
+        />
+        <div className="grid grid-cols-2 gap-4">
+          <InputField 
+            label="Money Down" 
+            placeholder="$"
+            value={customer.goalsMoneyDown} 
+            onChange={v => onChange({ goalsMoneyDown: v })} 
+          />
+          <InputField 
+            label="Estimated Credit Score" 
+            placeholder="e.g. 720"
+            value={customer.goalsCreditScore} 
+            onChange={v => onChange({ goalsCreditScore: v })} 
+          />
+        </div>
+      </div>
+    </section>
+  );
+}

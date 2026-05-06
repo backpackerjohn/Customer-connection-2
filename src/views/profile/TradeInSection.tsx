@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Customer } from '../../types';
 import { InputField } from '../../components/InputField';
 import { Toggle } from '../../components/Toggle';
+import { VinLookupButtons } from '../../components/VinLookupButtons';
 
 interface Props {
   customer: Customer;
@@ -64,11 +65,33 @@ export function TradeInSection({ customer, onChange }: Props) {
                 value={customer.tradeMileage} 
                 onChange={v => onChange({ tradeMileage: v })} 
               />
-              <InputField 
-                label="VIN" 
-                value={customer.tradeVin} 
-                onChange={v => onChange({ tradeVin: v })} 
-              />
+              <div className="space-y-2">
+                <InputField 
+                  label="VIN" 
+                  value={customer.tradeVin} 
+                  onChange={v => onChange({ tradeVin: v })} 
+                />
+                <div className="flex justify-end">
+                  <VinLookupButtons 
+                    vin={customer.tradeVin}
+                    currentValues={{
+                      year: customer.tradeYear,
+                      make: customer.tradeMake,
+                      model: customer.tradeModel,
+                      trim: customer.tradeTrim
+                    }}
+                    onResult={(results) => {
+                      const patch: Partial<Customer> = {};
+                      if (results.vin) patch.tradeVin = results.vin;
+                      if (results.year) patch.tradeYear = results.year;
+                      if (results.make) patch.tradeMake = results.make;
+                      if (results.model) patch.tradeModel = results.model;
+                      if (results.trim) patch.tradeTrim = results.trim;
+                      onChange(patch);
+                    }}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="space-y-4 pt-4 border-t border-gray-100">

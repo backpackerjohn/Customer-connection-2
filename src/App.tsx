@@ -51,12 +51,12 @@ export default function App() {
 
   // Auto-save effect
   useEffect(() => {
-    const hasAnyData = Boolean(
-      currentCustomer.firstName || currentCustomer.lastName || 
-      currentCustomer.phone || currentCustomer.email || 
-      currentCustomer.dlNumber || currentCustomer.vehicleVin ||
-      currentCustomer.address || currentCustomer.insuranceCompany
-    );
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, status, hasTradeIn, stillOwe, createdAt, updatedAt, ...rest } = currentCustomer;
+    const hasAnyData =
+      Object.values(rest).some(v => v !== '' && v !== undefined && v !== null) ||
+      hasTradeIn !== false ||
+      stillOwe !== false;
 
     if (!isDirty || !user || !hasAnyData) return;
     

@@ -18,6 +18,7 @@ export interface Customer {
   dlNumber?: string;
   dlState?: string;
   dlExpiration?: string;
+  dlImageUrl?: string;
   vehicleStock?: string;
   vehicleYear?: string;
   vehicleMake?: string;
@@ -25,6 +26,7 @@ export interface Customer {
   vehicleVin?: string;
   vehicleMiles?: string;
   insuranceCompany?: string;
+  insuranceImageUrl?: string;
   agentName?: string;
   hasTradeIn: boolean;
   tradeYear?: string;

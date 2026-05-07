@@ -5,13 +5,7 @@ import { normalizeImageForVision } from '../lib/imageNormalizer';
 import { ImageData } from '../services/aiService';
 
 interface VinLookupButtonsProps {
-  vin: string;
-  currentValues: {
-    year: string;
-    make: string;
-    model: string;
-    trim: string;
-  };
+  vin?: string;
   onResult: (results: Partial<{
     vin: string;
     year: string;
@@ -23,7 +17,6 @@ interface VinLookupButtonsProps {
 
 export const VinLookupButtons: React.FC<VinLookupButtonsProps> = ({
   vin,
-  currentValues,
   onResult
 }) => {
   const [isLoadingDecoded, setIsLoadingDecoded] = useState(false);
@@ -45,13 +38,13 @@ export const VinLookupButtons: React.FC<VinLookupButtonsProps> = ({
   }, []);
 
   const handleDecodeTyped = async () => {
-    if (vin.length !== 17 || isLoadingDecoded || isLoadingCamera) return;
+    if ((vin ?? '').length !== 17 || isLoadingDecoded || isLoadingCamera) return;
 
     setIsLoadingDecoded(true);
     setError(null);
 
     try {
-      const details = await decodeVin(vin);
+      const details = await decodeVin(vin ?? '');
       if (details) {
         applyResults(details);
       } else {
@@ -103,10 +96,10 @@ export const VinLookupButtons: React.FC<VinLookupButtonsProps> = ({
   const applyResults = (details: VinDetails) => {
     const results: Partial<{ year: string; make: string; model: string; trim: string }> = {};
     
-    if (!currentValues.year && details.year) results.year = details.year;
-    if (!currentValues.make && details.make) results.make = details.make;
-    if (!currentValues.model && details.model) results.model = details.model;
-    if (!currentValues.trim && details.trim) results.trim = details.trim;
+    if (details.year) results.year = details.year;
+    if (details.make) results.make = details.make;
+    if (details.model) results.model = details.model;
+    if (details.trim) results.trim = details.trim;
 
     if (Object.keys(results).length > 0) {
       onResult(results);
@@ -122,10 +115,10 @@ export const VinLookupButtons: React.FC<VinLookupButtonsProps> = ({
     if (!vin && extractedVin) results.vin = extractedVin;
 
     if (details) {
-      if (!currentValues.year && details.year) results.year = details.year;
-      if (!currentValues.make && details.make) results.make = details.make;
-      if (!currentValues.model && details.model) results.model = details.model;
-      if (!currentValues.trim && details.trim) results.trim = details.trim;
+      if (details.year) results.year = details.year;
+      if (details.make) results.make = details.make;
+      if (details.model) results.model = details.model;
+      if (details.trim) results.trim = details.trim;
     }
 
     if (Object.keys(results).length > 0) {
@@ -143,7 +136,7 @@ export const VinLookupButtons: React.FC<VinLookupButtonsProps> = ({
         <button
           type="button"
           onClick={handleDecodeTyped}
-          disabled={vin.length !== 17 || isAnyLoading}
+          disabled={(vin ?? '').length !== 17 || isAnyLoading}
           className="flex-1 flex items-center justify-center h-10 w-10 bg-gray-50 text-gray-600 rounded-xl hover:bg-gray-100 active:scale-95 disabled:opacity-50 transition-all border border-gray-100 shadow-sm"
           title="Decode typed VIN"
         >

@@ -19,7 +19,7 @@ export interface VinImageResult {
  * Decodes a 17-character VIN using the NHTSA API.
  */
 export async function decodeVin(vin: string): Promise<VinDetails | null> {
-  if (vin.length !== 17) return null;
+  if (!vin || vin.length !== 17) return null;
 
   try {
     const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${vin}?format=json`);
@@ -28,7 +28,7 @@ export async function decodeVin(vin: string): Promise<VinDetails | null> {
     const data = await response.json();
     const result = data.Results?.[0];
 
-    if (!result || !result.ErrorCode || !result.ErrorCode.startsWith("0")) {
+    if (!result || !result.Make?.trim() || !result.ModelYear?.trim()) {
       return null;
     }
 

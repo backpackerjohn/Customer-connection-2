@@ -10,6 +10,7 @@ export interface ChatResponse {
   message: string;
   hasGoodNotes: boolean;
   notesSummary?: string;
+  documentType?: 'license' | 'insurance' | 'window_sticker' | 'other';
 }
 
 export interface ImageData {
@@ -70,6 +71,7 @@ export async function processCustomerChat(
     4. When an image is provided, perform full OCR and emit EVERY field you can read from it — do not stop after the first 2-3 fields.
     5. Always return a 'message' field summarizing what you did (e.g., "I've extracted John's info from his driver's license").
     6. 'hasGoodNotes' should be true if you found extra context not in the fields.
+    7. When an image is provided, set 'documentType' to one of: 'license' (driver's license), 'insurance' (insurance ID card), 'window_sticker' (vehicle Monroney sticker / dealer addendum), or 'other'. When no image is provided, omit documentType.
     ${currentDataBlock}
   `;
 
@@ -145,9 +147,13 @@ export async function processCustomerChat(
             inventoryStockFound: { type: Type.STRING, description: "If a vehicle stock number is found in the text or image, put it here." },
             message: { type: Type.STRING },
             hasGoodNotes: { type: Type.BOOLEAN },
-            notesSummary: { type: Type.STRING }
+            notesSummary: { type: Type.STRING },
+            documentType: { 
+              type: Type.STRING, 
+              enum: ['license', 'insurance', 'window_sticker', 'other'] 
+            }
           },
-          propertyOrdering: ["updatedFields", "inventoryStockFound", "message", "hasGoodNotes", "notesSummary"],
+          propertyOrdering: ["updatedFields", "inventoryStockFound", "message", "hasGoodNotes", "notesSummary", "documentType"],
           required: ["updatedFields", "message", "hasGoodNotes"]
         }
       }

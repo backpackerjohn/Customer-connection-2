@@ -21,7 +21,11 @@ interface AIChatOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   currentCustomer: Customer;
-  onFieldsExtracted: (fields: Record<string, unknown>, notesSummary?: string) => void;
+  onFieldsExtracted: (
+    fields: Record<string, unknown>, 
+    notesSummary?: string,
+    image?: { type: 'license' | 'insurance', file: File }
+  ) => void;
 }
 
 export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({ 
@@ -151,6 +155,16 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
 
       if (Object.keys(cleanFields).length > 0 || response.hasGoodNotes) {
         onFieldsExtracted(cleanFields, response.notesSummary);
+      }
+
+      if (
+        imageFile && 
+        (response.documentType === 'license' || response.documentType === 'insurance')
+      ) {
+        onFieldsExtracted({}, undefined, { 
+          type: response.documentType, 
+          file: imageFile 
+        });
       }
     } catch (error) {
       console.error("Chat Error:", error);

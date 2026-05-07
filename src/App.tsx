@@ -22,15 +22,18 @@ import {
   createCustomer, updateCustomer, subscribeToCustomers 
 } from './services/customersService';
 import { createNote, subscribeToNotes } from './services/notesService';
+import { buildTestDrivePacket, downloadPdfBytes, packetFilename } from './services/pdfService';
+import { getFormFileMetadata, uploadCustomerImage } from './services/imagesService';
 
 import { LoginView } from './views/LoginView';
 import { DashboardView } from './views/DashboardView';
 import { CustomerProfileView } from './views/CustomerProfileView';
+import { SettingsView } from './views/SettingsView';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'dashboard' | 'profile'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'profile' | 'settings'>('dashboard');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [currentCustomer, setCurrentCustomer] = useState<Customer>(emptyCustomer);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -39,7 +42,12 @@ export default function App() {
   const [isDirty, setIsDirty] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isGeneratingPacket, setIsGeneratingPacket] = useState(false);
   const [pendingAINotes, setPendingAINotes] = useState<string[]>([]);
+  const [pendingImages, setPendingImages] = useState<{ 
+    type: 'license' | 'insurance', 
+    file: File 
+  }[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -85,6 +93,24 @@ export default function App() {
             ));
             setPendingAINotes([]);
           }
+
+          // Step 8d: Flush pending images for the new customer
+          if (pendingImages.length > 0) {
+            const uploads = await Promise.all(
+              pendingImages.map(img => 
+                uploadCustomerImage(user.uid, customerId!, img.type, img.file)
+                  .then(url => ({ type: img.type, url }))
+              )
+            );
+            const urlPatch: Partial<Customer> = {};
+            for (const { type, url } of uploads) {
+              if (type === 'license') urlPatch.dlImageUrl = url;
+              else urlPatch.insuranceImageUrl = url;
+            }
+            await updateCustomer(customerId!, { ...currentCustomer, id: customerId, ...urlPatch });
+            setCurrentCustomer(prev => ({ ...prev, ...urlPatch }));
+            setPendingImages([]);
+          }
         }
         setSaveStatus('synced');
         setIsDirty(false);
@@ -95,7 +121,7 @@ export default function App() {
     }, 2000);
 
     return () => clearTimeout(timeoutId);
-  }, [currentCustomer, isDirty, user, pendingAINotes]);
+  }, [currentCustomer, isDirty, user, pendingAINotes, pendingImages]);
 
   useEffect(() => {
     if (!user) return;
@@ -162,7 +188,41 @@ export default function App() {
     }
   };
 
-  const handleAIFieldsExtracted = (fields: Record<string, unknown>, notesSummary?: string) => {
+  const handleTestDrive = async () => {
+    if (!currentCustomer.id) {
+      alert('Save the customer first by entering at least a name.');
+      return;
+    }
+    if (isGeneratingPacket) return;
+    
+    setIsGeneratingPacket(true);
+    try {
+      const [tda, interview] = await Promise.all([
+        getFormFileMetadata('test-drive-agreement.pdf'),
+        getFormFileMetadata('interview-sheet.pdf'),
+      ]);
+      const missing: string[] = [];
+      if (!tda.exists) missing.push('Test Drive Agreement');
+      if (!interview.exists) missing.push('Customer Interview Sheet');
+      if (missing.length > 0) {
+        alert(`Not uploaded: ${missing.join(' and ')}. Go to Settings → Forms.`);
+        return;
+      }
+      const bytes = await buildTestDrivePacket(currentCustomer);
+      downloadPdfBytes(bytes, packetFilename(currentCustomer));
+    } catch (err) {
+      console.error('Test Drive packet generation failed:', err);
+      alert('Could not generate Test Drive packet. Check console.');
+    } finally {
+      setIsGeneratingPacket(false);
+    }
+  };
+
+  const handleAIFieldsExtracted = (
+    fields: Record<string, unknown>, 
+    notesSummary?: string,
+    image?: { type: 'license' | 'insurance', file: File }
+  ) => {
     if (Object.keys(fields).length > 0) {
       updateCustomerState(fields);
     }
@@ -178,6 +238,24 @@ export default function App() {
       } else {
         // BUG 5 FIX: Buffer the note for the pending customer
         setPendingAINotes(prev => [...prev, notesSummary]);
+      }
+    }
+
+    if (image && user) {
+      if (currentCustomer.id) {
+        // Customer exists — upload immediately
+        uploadCustomerImage(user.uid, currentCustomer.id, image.type, image.file)
+          .then(url => {
+            const patch = image.type === 'license' 
+              ? { dlImageUrl: url } 
+              : { insuranceImageUrl: url };
+            updateCustomerState(patch);
+          })
+          .catch(err => handleFirestoreError(err, OperationType.WRITE, 
+            `customer-images/${currentCustomer.id}`));
+      } else {
+        // Buffer until customer is created
+        setPendingImages(prev => [...prev, image]);
       }
     }
   };
@@ -198,7 +276,12 @@ export default function App() {
             onClick={() => setView('dashboard')}
           />
           <NavItem icon={<Users size={20} />} label="Customers" />
-          <NavItem icon={<Settings size={20} />} label="Settings" />
+          <NavItem 
+            icon={<Settings size={20} />} 
+            label="Settings" 
+            active={view === 'settings'}
+            onClick={() => setView('settings')}
+          />
         </nav>
         <div className="pt-6 border-t border-gray-100">
           <button 
@@ -212,7 +295,7 @@ export default function App() {
       </aside>
 
       <AnimatePresence mode="wait">
-        {view === 'dashboard' ? (
+        {view === 'dashboard' && (
           <motion.div
             key="dashboard"
             initial={{ opacity: 0, y: 10 }}
@@ -225,7 +308,8 @@ export default function App() {
               onEditCustomer={handleEditCustomer}
             />
           </motion.div>
-        ) : (
+        )}
+        {view === 'profile' && (
           <motion.div
             key="profile"
             initial={{ opacity: 0, x: 20 }}
@@ -239,13 +323,25 @@ export default function App() {
               notes={notes}
               newNote={newNote}
               activeMenu={activeMenu}
+              isGeneratingPacket={isGeneratingPacket}
               onBack={() => setView('dashboard')}
               onUpdateCustomer={updateCustomerState}
               onNewNoteChange={setNewNote}
               onAddNote={handleAddNote}
               onActiveMenuChange={setActiveMenu}
               onChat={() => setIsChatOpen(true)}
+              onTestDrive={handleTestDrive}
             />
+          </motion.div>
+        )}
+        {view === 'settings' && (
+          <motion.div
+            key="settings"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+          >
+            <SettingsView onBack={() => setView('dashboard')} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -258,11 +354,19 @@ export default function App() {
       />
 
       {/* Mobile Nav Bar - Only visible on Dashboard or if we want global nav */}
-      {view === 'dashboard' && (
+      {(view === 'dashboard' || view === 'settings') && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-8 py-4 flex items-center justify-between z-40">
-          <NavIconButton icon={<LayoutDashboard size={24} />} active />
+          <NavIconButton 
+            icon={<LayoutDashboard size={24} />} 
+            active={view === 'dashboard'} 
+            onClick={() => setView('dashboard')}
+          />
           <NavIconButton icon={<Users size={24} />} onClick={() => setView('dashboard')} />
-          <NavIconButton icon={<Settings size={24} />} />
+          <NavIconButton 
+            icon={<Settings size={24} />} 
+            active={view === 'settings'}
+            onClick={() => setView('settings')}
+          />
           <button 
             onClick={() => signOut(auth)}
             className="text-gray-400 hover:text-red-500"

@@ -73,13 +73,7 @@ export function TradeInSection({ customer, onChange }: Props) {
                 />
                 <div className="flex justify-end">
                   <VinLookupButtons 
-                    vin={customer.tradeVin}
-                    currentValues={{
-                      year: customer.tradeYear,
-                      make: customer.tradeMake,
-                      model: customer.tradeModel,
-                      trim: customer.tradeTrim
-                    }}
+                    vin={customer.tradeVin ?? ''}
                     onResult={(results) => {
                       const patch: Partial<Customer> = {};
                       if (results.vin) patch.tradeVin = results.vin;

@@ -15,7 +15,8 @@ import {
   MessageCircle,
   Users,
   Flag,
-  MessageSquare
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Customer, Note } from '../types';
@@ -36,12 +37,14 @@ interface Props {
   notes: Note[];
   newNote: string;
   activeMenu: string | null;
+  isGeneratingPacket: boolean;
   onBack: () => void;
   onUpdateCustomer: (updates: Partial<Customer>) => void;
   onNewNoteChange: (note: string) => void;
   onAddNote: () => void;
   onActiveMenuChange: (menu: string | null) => void;
   onChat: () => void;
+  onTestDrive: () => void;
 }
 
 export function CustomerProfileView({
@@ -51,12 +54,14 @@ export function CustomerProfileView({
   notes,
   newNote,
   activeMenu,
+  isGeneratingPacket,
   onBack,
   onUpdateCustomer,
   onNewNoteChange,
   onAddNote,
   onActiveMenuChange,
-  onChat
+  onChat,
+  onTestDrive
 }: Props) {
   return (
     <div className="max-w-2xl mx-auto">
@@ -164,7 +169,14 @@ export function CustomerProfileView({
                 label="Chat" 
                 onClick={onChat}
               />
-              <SubButton icon={<Gauge size={20} />} label="Test Drive" />
+              <SubButton 
+                icon={isGeneratingPacket 
+                  ? <Loader2 size={20} className="animate-spin" /> 
+                  : <Gauge size={20} />
+                } 
+                label="Test Drive" 
+                onClick={isGeneratingPacket ? undefined : onTestDrive}
+              />
               <SubButton icon={<CheckCircle size={20} />} label="Sold" />
             </motion.div>
           )}

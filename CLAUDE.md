@@ -12,21 +12,26 @@ A mobile-first dealer CRM. Dealers sign in with Google, create customer profiles
 - Vitest + @firebase/rules-unit-testing for tests
 
 ## File layout
-- `src/App.tsx` — owns ALL state and effects (auth, customers list, current customer, notes, auto-save, AI overlay open/closed). Routes between LoginView, DashboardView, and CustomerProfileView. Pure prop drilling — no Context, no Redux, no React Query.
+- `src/App.tsx` — owns ALL state and effects (auth, customers list, current customer, notes, auto-save, AI overlay open/closed). Routes between LoginView, DashboardView, CustomerProfileView, and SettingsView. Pure prop drilling — no Context, no Redux, no React Query.
 - `src/types.ts` — `Customer`, `Note`, `emptyCustomer`. The single source of truth for the data model.
 - `src/lib/firebase.ts` — Firebase init, `db`, `auth`, `handleFirestoreError`. Don't touch unless changing Firebase config.
 - `src/lib/imageNormalizer.ts` — pre-Gemini image processing.
 - `src/lib/dateNormalizer.ts` — `toISODate`. Tested.
 - `src/services/customersService.ts` — `createCustomer`, `updateCustomer`, `subscribeToCustomers`. THE ONLY PLACE outside this file that should call `addDoc`/`updateDoc`/`onSnapshot` for the customers collection.
 - `src/services/notesService.ts` — same chokepoint for the notes subcollection.
+- `src/services/imagesService.ts` — Firebase Storage operations (customer images + blank PDF retrieval).
 - `src/services/aiService.ts` — `processCustomerChat`. Owns the Gemini schema, system instruction, and response parsing.
 - `src/services/inventoryService.ts` — mock inventory (3 vehicles). Will be replaced by a real feed eventually; do not redesign yet.
 - `src/components/` — atomic UI primitives (InputField, Toggle, StatusBadge, SaveStatusIndicator, MenuButton, SubButton, NavItem, NavIconButton, AIChatOverlay).
 - `src/views/LoginView.tsx` — Google sign-in screen.
 - `src/views/DashboardView.tsx` — customer list grid.
 - `src/views/CustomerProfileView.tsx` — sticky header, the 6 form sections (composed from `src/views/profile/`), and the bottom action bar.
+- `src/views/SettingsView.tsx` — Settings screen.
+- `src/views/settings/FormsManagerSection.tsx` — Upload / replace / delete blank PDF templates.
 - `src/views/profile/*Section.tsx` — one file per form card (CustomerInfo, Insurance, NewVehicle, TradeIn, Goals, TimelineNotes). Each takes `{ customer, onChange }` (TimelineNotes takes additional notes/newNote/onAddNote props).
+- `src/lib/formSlots.ts` — Predefined PDF template slots.
 - `firestore.rules` — security rules. Strict; rejects unknown fields on update, oversized strings, identity spoofing.
+- `storage.rules` — storage security rules.
 - `security_spec.md` — the "dirty dozen" attack scenarios. Mapped to tests in `tests/firestore.rules.test.ts`.
 
 ## Conventions
@@ -39,9 +44,15 @@ This is the most common change and the most error-prone. To add a field you MUST
 3. `firestore.rules` — add a type/size check inside `isValidCustomer`, AND add the field name to the `affectedKeys().hasOnly([...])` list in the update rule.
 4. `src/views/profile/*Section.tsx` — render an `<InputField>` (or `<Toggle>`) wired to `customer.<field>` and `onChange({ <field>: v })`.
 5. If the field is a date — add it to the `toISODate` normalization block at the bottom of `processCustomerChat`.
+6. If the field is a Storage URL — also update `storage.rules` and ensure the upload path matches the rule pattern.
 
 ### Adding Firestore reads/writes
 Always go through `src/services/customersService.ts` or `src/services/notesService.ts`. Never call `addDoc`, `updateDoc`, or `onSnapshot` directly from a view or component.
+
+### Adding a new PDF form template
+1. Append a new entry to `FORM_SLOTS` in `src/lib/formSlots.ts`.
+2. Settings → Forms shows it automatically.
+3. To USE it, add a mapping array in `pdfFieldMappings.ts` and a fill function in `pdfService.ts`.
 
 ### Date fields
 HTML `<input type="date">` only displays values formatted as YYYY-MM-DD. The AI is instructed to return ISO; the `toISODate` helper is the safety net. Don't accept raw user date strings elsewhere without normalizing.
@@ -63,6 +74,7 @@ HTML `<input type="date">` only displays values formatted as YYYY-MM-DD. The AI 
 - **Mock inventory** in `src/services/inventoryService.ts` (P1234, N5678, U9999). Replace with a real feed only when explicitly requested.
 - **The dual stock fields** (`vehicleStock` + `inventoryStockFound` in the AI response). There's a deliberate fallback in `AIChatOverlay.tsx` that copies `inventoryStockFound` into `vehicleStock` when the inventory lookup misses. Keep both fields.
 - **`emailVerified` enforcement in firestore.rules.** Currently not enforced. The corresponding test in `tests/firestore.rules.test.ts` is `it.skip`. If you add the enforcement, unskip the test in the same change.
+- **The exact filenames in `formSlots.ts`** — `pdfService.ts` references them by literal string. Renaming silently breaks Test Drive.
 
 ## Common gotchas
 

@@ -53,6 +53,7 @@ service cloud.firestore {
         && (data.get('dlNumber', '') is string && data.get('dlNumber', '').size() <= 50)
         && (data.get('dlState', '') is string && data.get('dlState', '').size() <= 50)
         && (data.get('dlExpiration', '') is string && data.get('dlExpiration', '').size() <= 20)
+        && (data.get('dlImageUrl', '') is string && data.get('dlImageUrl', '').size() <= 1024)
         && (data.get('vehicleStock', '') is string && data.get('vehicleStock', '').size() <= 50)
         && (data.get('vehicleYear', '') is string && data.get('vehicleYear', '').size() <= 10)
         && (data.get('vehicleMake', '') is string && data.get('vehicleMake', '').size() <= 50)
@@ -60,6 +61,7 @@ service cloud.firestore {
         && (data.get('vehicleVin', '') is string && data.get('vehicleVin', '').size() <= 50)
         && (data.get('vehicleMiles', '') is string && data.get('vehicleMiles', '').size() <= 20)
         && (data.get('insuranceCompany', '') is string && data.get('insuranceCompany', '').size() <= 100)
+        && (data.get('insuranceImageUrl', '') is string && data.get('insuranceImageUrl', '').size() <= 1024)
         && (data.get('agentName', '') is string && data.get('agentName', '').size() <= 100)
         && (data.get('tradeYear', '') is string && data.get('tradeYear', '').size() <= 10)
         && (data.get('tradeMake', '') is string && data.get('tradeMake', '').size() <= 50)
@@ -105,8 +107,8 @@ service cloud.firestore {
         && (
           incoming().diff(existing()).affectedKeys().hasOnly([
             'firstName', 'middleInitial', 'lastName', 'dob', 'phone', 'email', 'address', 'city', 'state', 'zip',
-            'dlNumber', 'dlState', 'dlExpiration', 'vehicleStock', 'vehicleYear', 'vehicleMake',
-            'vehicleModel', 'vehicleVin', 'vehicleMiles', 'insuranceCompany', 'agentName',
+            'dlNumber', 'dlState', 'dlExpiration', 'dlImageUrl', 'vehicleStock', 'vehicleYear', 'vehicleMake',
+            'vehicleModel', 'vehicleVin', 'vehicleMiles', 'insuranceCompany', 'insuranceImageUrl', 'agentName',
             'hasTradeIn', 'tradeYear', 'tradeMake', 'tradeModel', 'tradeTrim', 'tradeMileage',
             'tradeVin', 'stillOwe', 'lienholder', 'payoffAmount', 'monthlyPayment',
             'monthsRemaining', 'goalsMonthlyPayment', 'goalsMoneyDown', 'goalsCreditScore', 'status', 'updatedAt'

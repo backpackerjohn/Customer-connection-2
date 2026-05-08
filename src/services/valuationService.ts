@@ -79,7 +79,6 @@ Condition: ${request.condition}`;
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       config: {
         systemInstruction,
-        responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
       }
     });
@@ -87,7 +86,11 @@ Condition: ${request.condition}`;
     const resultText = response.text || '{}';
     let parsed: { low?: string; high?: string; source?: string; notes?: string } = {};
     try {
-      parsed = JSON.parse(resultText);
+      const cleaned = resultText
+        .replace(/^\s*```(?:json)?\s*/i, '')
+        .replace(/\s*```\s*$/, '')
+        .trim();
+      parsed = JSON.parse(cleaned);
     } catch (e) {
       console.error("Valuation JSON Parse Error:", e, resultText);
       return null;

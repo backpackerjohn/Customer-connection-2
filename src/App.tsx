@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Users, 
   LayoutDashboard, 
@@ -24,6 +24,7 @@ import {
 import { createNote, subscribeToNotes } from './services/notesService';
 import { buildTestDrivePacket, downloadPdfBytes, packetFilename } from './services/pdfService';
 import { getFormFileMetadata, uploadCustomerImage } from './services/imagesService';
+import { getTradeValuation } from './services/valuationService';
 
 import { LoginView } from './views/LoginView';
 import { DashboardView } from './views/DashboardView';
@@ -43,6 +44,8 @@ export default function App() {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isGeneratingPacket, setIsGeneratingPacket] = useState(false);
+  const [isEstimatingTradeValue, setIsEstimatingTradeValue] = useState(false);
+  const requestTokenRef = useRef<number>(0);
   const [pendingAINotes, setPendingAINotes] = useState<string[]>([]);
   const [pendingImages, setPendingImages] = useState<{ 
     type: 'license' | 'insurance', 
@@ -218,6 +221,51 @@ export default function App() {
     }
   };
 
+  const handleTradeEstimate = async (
+    input: { 
+      vin: string; 
+      year: string; 
+      make: string; 
+      model: string; 
+      trim: string; 
+      mileage: string; 
+      condition: 'excellent' | 'very_good' | 'good' | 'fair'; 
+    },
+    options?: { skipCache?: boolean }
+  ) => {
+    const token = ++requestTokenRef.current;
+    const capturedId = currentCustomer.id;
+    setIsEstimatingTradeValue(true);
+
+    try {
+      const result = await getTradeValuation(input, options);
+      
+      // DISCARD if stale
+      if (token !== requestTokenRef.current || currentCustomer.id !== capturedId) {
+        return;
+      }
+
+      if (result) {
+        updateCustomerState({ 
+          tradeValueLow: result.low, 
+          tradeValueHigh: result.high, 
+          tradeValueSource: result.source, 
+          tradeValueCondition: input.condition, 
+          tradeValueAt: new Date().toISOString() 
+        });
+      } else {
+        alert("Couldn't find valuation data. You can enter values manually.");
+      }
+    } catch (err) {
+      console.error('Trade estimate failed:', err);
+      alert("An error occurred while finding valuation data.");
+    } finally {
+      if (token === requestTokenRef.current) {
+        setIsEstimatingTradeValue(false);
+      }
+    }
+  };
+
   const handleAIFieldsExtracted = (
     fields: Record<string, unknown>, 
     notesSummary?: string,
@@ -324,6 +372,7 @@ export default function App() {
               newNote={newNote}
               activeMenu={activeMenu}
               isGeneratingPacket={isGeneratingPacket}
+              isEstimatingTradeValue={isEstimatingTradeValue}
               onBack={() => setView('dashboard')}
               onUpdateCustomer={updateCustomerState}
               onNewNoteChange={setNewNote}
@@ -331,6 +380,7 @@ export default function App() {
               onActiveMenuChange={setActiveMenu}
               onChat={() => setIsChatOpen(true)}
               onTestDrive={handleTestDrive}
+              onTradeEstimate={handleTradeEstimate}
             />
           </motion.div>
         )}

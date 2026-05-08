@@ -6,12 +6,27 @@ import { InputField } from '../../components/InputField';
 import { Toggle } from '../../components/Toggle';
 import { VinLookupButtons } from '../../components/VinLookupButtons';
 
+import { TradeEquityPanel } from '../../components/TradeEquityPanel';
+
 interface Props {
   customer: Customer;
   onChange: (patch: Partial<Customer>) => void;
+  onTradeEstimate: (
+    input: { 
+      vin: string; 
+      year: string; 
+      make: string; 
+      model: string; 
+      trim: string; 
+      mileage: string; 
+      condition: 'excellent' | 'very_good' | 'good' | 'fair'; 
+    },
+    options?: { skipCache?: boolean }
+  ) => void;
+  isEstimatingTradeValue: boolean;
 }
 
-export function TradeInSection({ customer, onChange }: Props) {
+export function TradeInSection({ customer, onChange, onTradeEstimate, isEstimatingTradeValue }: Props) {
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-2 px-2">
@@ -128,6 +143,13 @@ export function TradeInSection({ customer, onChange }: Props) {
                 </motion.div>
               )}
             </div>
+
+            <TradeEquityPanel 
+              customer={customer} 
+              onChange={onChange} 
+              onEstimate={onTradeEstimate}
+              isEstimating={isEstimatingTradeValue}
+            />
           </motion.div>
         )}
       </div>

@@ -35,6 +35,12 @@ export interface Customer {
   tradeTrim?: string;
   tradeMileage?: string;
   tradeVin?: string;
+  tradeValueLow?: string;
+  tradeValueHigh?: string;
+  tradeValueSource?: string;
+  tradeValueCondition?: 'excellent' | 'very_good' | 'good' | 'fair';
+  tradeValueAt?: string;
+  customerDesiredTradeValue?: string;
   stillOwe: boolean;
   lienholder?: string;
   payoffAmount?: string;

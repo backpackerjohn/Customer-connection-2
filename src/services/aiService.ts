@@ -55,6 +55,7 @@ export async function processCustomerChat(
     - insuranceCompany, agentName: Insurance details
     - stillOwe, lienholder, payoffAmount, monthlyPayment, monthsRemaining: Financial details
     - goalsMonthlyPayment, goalsMoneyDown, goalsCreditScore: Customer goals
+    - customerDesiredTradeValue: Customer's desired trade-in value (what they're asking for the trade).
     - status: Customer status ("active", "inactive", "lead")
  
      RULES:
@@ -132,6 +133,7 @@ export async function processCustomerChat(
                 goalsMonthlyPayment: { type: Type.STRING },
                 goalsMoneyDown: { type: Type.STRING },
                 goalsCreditScore: { type: Type.STRING },
+                customerDesiredTradeValue: { type: Type.STRING },
                 status: { type: Type.STRING, enum: ["active", "inactive", "lead"] }
               },
               propertyOrdering: [
@@ -141,7 +143,7 @@ export async function processCustomerChat(
                 "insuranceCompany", "agentName", "hasTradeIn", "tradeYear", "tradeMake",
                 "tradeModel", "tradeTrim", "tradeMileage", "tradeVin", "stillOwe",
                 "lienholder", "payoffAmount", "monthlyPayment", "monthsRemaining",
-                "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "status"
+                "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status"
               ]
             },
             inventoryStockFound: { type: Type.STRING, description: "If a vehicle stock number is found in the text or image, put it here." },

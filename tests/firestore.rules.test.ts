@@ -160,4 +160,28 @@ describe('Firestore rules — Customer collection', () => {
     const q = query(collection(aliceDb, 'customers'), where('createdBy', '==', 'user_alice'));
     await assertSucceeds(getDocs(q));
   });
+
+  it('13. Trade Equity Fields — owner can write all 6 new fields', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'customers/trade1'), validCustomer({
+        tradeValueLow: '15000',
+        tradeValueHigh: '17000',
+        tradeValueSource: 'KBB',
+        tradeValueCondition: 'excellent',
+        tradeValueAt: new Date().toISOString(),
+        customerDesiredTradeValue: '18000'
+      }))
+    );
+  });
+
+  it('14. Resource Poisoning (TradeValueSource) — rejects > 100 chars', async () => {
+    const aliceDb = aliceContext().firestore();
+    const longSource = 'a'.repeat(101);
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/trade2'), validCustomer({
+        tradeValueSource: longSource
+      }))
+    );
+  });
 });

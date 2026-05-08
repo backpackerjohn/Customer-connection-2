@@ -75,7 +75,13 @@ service cloud.firestore {
         && (data.get('monthsRemaining', '') is string && data.get('monthsRemaining', '').size() <= 20)
         && (data.get('goalsMonthlyPayment', '') is string && data.get('goalsMonthlyPayment', '').size() <= 50)
         && (data.get('goalsMoneyDown', '') is string && data.get('goalsMoneyDown', '').size() <= 20)
-        && (data.get('goalsCreditScore', '') is string && data.get('goalsCreditScore', '').size() <= 20);
+        && (data.get('goalsCreditScore', '') is string && data.get('goalsCreditScore', '').size() <= 20)
+        && (data.get('tradeValueLow', '') is string && data.get('tradeValueLow', '').size() <= 20)
+        && (data.get('tradeValueHigh', '') is string && data.get('tradeValueHigh', '').size() <= 20)
+        && (data.get('tradeValueSource', '') is string && data.get('tradeValueSource', '').size() <= 100)
+        && (data.get('tradeValueCondition', '') is string && data.get('tradeValueCondition', '').size() <= 20)
+        && (data.get('tradeValueAt', '') is string && data.get('tradeValueAt', '').size() <= 30)
+        && (data.get('customerDesiredTradeValue', '') is string && data.get('customerDesiredTradeValue', '').size() <= 20);
     }
 
     function isValidNote(data) {
@@ -111,7 +117,9 @@ service cloud.firestore {
             'vehicleModel', 'vehicleVin', 'vehicleMiles', 'insuranceCompany', 'insuranceImageUrl', 'agentName',
             'hasTradeIn', 'tradeYear', 'tradeMake', 'tradeModel', 'tradeTrim', 'tradeMileage',
             'tradeVin', 'stillOwe', 'lienholder', 'payoffAmount', 'monthlyPayment',
-            'monthsRemaining', 'goalsMonthlyPayment', 'goalsMoneyDown', 'goalsCreditScore', 'status', 'updatedAt'
+            'monthsRemaining', 'goalsMonthlyPayment', 'goalsMoneyDown', 'goalsCreditScore',
+            'tradeValueLow', 'tradeValueHigh', 'tradeValueSource', 'tradeValueCondition',
+            'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt'
           ])
         )
         && incoming().updatedAt == request.time;

@@ -37,7 +37,7 @@ A mobile-first dealer CRM. Dealers sign in with Google, create customer profiles
 ## Conventions
 
 ### Adding a new Customer field
-This is the most common change and the most error-prone. To add a field you MUST update FIVE places. Missing any one of them produces a silent bug.
+This is the most common change and the most error-prone. To add a field you MUST update SIX places. Missing any one of them produces a silent bug.
 
 1. `src/types.ts` — add to the `Customer` interface.
 2. `src/services/aiService.ts` — add to `responseSchema.properties.updatedFields.properties` AND to `propertyOrdering` AND to the "EXTRACT THESE FIELDS" list in the system instruction.

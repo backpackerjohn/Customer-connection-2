@@ -38,6 +38,7 @@ interface Props {
   newNote: string;
   activeMenu: string | null;
   isGeneratingPacket: boolean;
+  isEstimatingTradeValue: boolean;
   onBack: () => void;
   onUpdateCustomer: (updates: Partial<Customer>) => void;
   onNewNoteChange: (note: string) => void;
@@ -45,6 +46,18 @@ interface Props {
   onActiveMenuChange: (menu: string | null) => void;
   onChat: () => void;
   onTestDrive: () => void;
+  onTradeEstimate: (
+    input: { 
+      vin: string; 
+      year: string; 
+      make: string; 
+      model: string; 
+      trim: string; 
+      mileage: string; 
+      condition: 'excellent' | 'very_good' | 'good' | 'fair'; 
+    },
+    options?: { skipCache?: boolean }
+  ) => void;
 }
 
 export function CustomerProfileView({
@@ -55,13 +68,15 @@ export function CustomerProfileView({
   newNote,
   activeMenu,
   isGeneratingPacket,
+  isEstimatingTradeValue,
   onBack,
   onUpdateCustomer,
   onNewNoteChange,
   onAddNote,
   onActiveMenuChange,
   onChat,
-  onTestDrive
+  onTestDrive,
+  onTradeEstimate
 }: Props) {
   return (
     <div className="max-w-2xl mx-auto">
@@ -89,7 +104,12 @@ export function CustomerProfileView({
         <CustomerInfoSection customer={currentCustomer} onChange={onUpdateCustomer} />
         <InsuranceSection customer={currentCustomer} onChange={onUpdateCustomer} />
         <NewVehicleSection customer={currentCustomer} onChange={onUpdateCustomer} />
-        <TradeInSection customer={currentCustomer} onChange={onUpdateCustomer} />
+        <TradeInSection 
+          customer={currentCustomer} 
+          onChange={onUpdateCustomer} 
+          onTradeEstimate={onTradeEstimate}
+          isEstimatingTradeValue={isEstimatingTradeValue}
+        />
         <GoalsSection customer={currentCustomer} onChange={onUpdateCustomer} />
         <TimelineNotesSection 
           customer={currentCustomer}

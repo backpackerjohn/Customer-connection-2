@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { timed } from "../lib/timing";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
@@ -74,13 +75,15 @@ Mileage: ${request.mileage}
 Condition: ${request.condition}`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      config: {
-        systemInstruction,
-        tools: [{ googleSearch: {} }],
-      }
+    const response = await timed('valuationService.getTradeValuation (grounded)', async () => {
+      return await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        config: {
+          systemInstruction,
+          tools: [{ googleSearch: {} }],
+        }
+      });
     });
 
     const resultText = response.text || '{}';

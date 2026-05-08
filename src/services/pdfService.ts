@@ -4,6 +4,7 @@ import { getBlankFormUrl } from './imagesService';
 import { 
   INTERVIEW_SHEET_FIELDS, TEST_DRIVE_AGREEMENT_FIELDS 
 } from '../lib/pdfFieldMappings';
+import { timed } from '../lib/timing';
 
 export async function fillTestDriveAgreement(customer: Customer): Promise<Uint8Array> {
   const url = await getBlankFormUrl('test-drive-agreement.pdf');
@@ -101,37 +102,39 @@ async function addImagePage(
 }
 
 export async function buildTestDrivePacket(customer: Customer): Promise<Uint8Array> {
-  const tdaBytes = await fillTestDriveAgreement(customer);
-  const interviewBytes = await fillInterviewSheet(customer);
+  return await timed('pdfService.buildTestDrivePacket', async () => {
+    const tdaBytes = await fillTestDriveAgreement(customer);
+    const interviewBytes = await fillInterviewSheet(customer);
 
-  const merged = await PDFDocument.create();
+    const merged = await PDFDocument.create();
 
-  const tdaDoc = await PDFDocument.load(tdaBytes);
-  const tdaPages = await merged.copyPages(tdaDoc, tdaDoc.getPageIndices());
-  tdaPages.forEach(p => merged.addPage(p));
+    const tdaDoc = await PDFDocument.load(tdaBytes);
+    const tdaPages = await merged.copyPages(tdaDoc, tdaDoc.getPageIndices());
+    tdaPages.forEach(p => merged.addPage(p));
 
-  const interviewDoc = await PDFDocument.load(interviewBytes);
-  const interviewPages = await merged.copyPages(interviewDoc, interviewDoc.getPageIndices());
-  interviewPages.forEach(p => merged.addPage(p));
+    const interviewDoc = await PDFDocument.load(interviewBytes);
+    const interviewPages = await merged.copyPages(interviewDoc, interviewDoc.getPageIndices());
+    interviewPages.forEach(p => merged.addPage(p));
 
-  if (customer.dlImageUrl) {
-    try {
-      await addImagePage(merged, customer.dlImageUrl, 
-        `Driver's License — ${customer.firstName} ${customer.lastName}`);
-    } catch (err) {
-      console.warn('DL image page failed, skipping:', err);
+    if (customer.dlImageUrl) {
+      try {
+        await addImagePage(merged, customer.dlImageUrl, 
+          `Driver's License — ${customer.firstName} ${customer.lastName}`);
+      } catch (err) {
+        console.warn('DL image page failed, skipping:', err);
+      }
     }
-  }
-  if (customer.insuranceImageUrl) {
-    try {
-      await addImagePage(merged, customer.insuranceImageUrl, 
-        `Insurance Card — ${customer.firstName} ${customer.lastName}`);
-    } catch (err) {
-      console.warn('Insurance image page failed, skipping:', err);
+    if (customer.insuranceImageUrl) {
+      try {
+        await addImagePage(merged, customer.insuranceImageUrl, 
+          `Insurance Card — ${customer.firstName} ${customer.lastName}`);
+      } catch (err) {
+        console.warn('Insurance image page failed, skipping:', err);
+      }
     }
-  }
 
-  return await merged.save();
+    return await merged.save();
+  });
 }
 
 export function downloadPdfBytes(bytes: Uint8Array, filename: string): void {

@@ -1,3 +1,5 @@
+import { timed } from './timing';
+
 /**
  * Normalizes an image for Gemini Vision processing.
  * - Handles EXIF orientation (rotation).
@@ -9,81 +11,83 @@ export async function normalizeImageForVision(file: File): Promise<{
   base64: string;
   mimeType: string;
 }> {
-  try {
-    let imgSource: TexImageSource | HTMLImageElement;
-
+  return await timed('lib.normalizeImageForVision', async () => {
     try {
-      // Modern approach: Handles EXIF rotation automatically
-      imgSource = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    } catch {
-      // Fallback for older browsers or if createImageBitmap fails
-      imgSource = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = URL.createObjectURL(file);
-      });
-    }
+      let imgSource: TexImageSource | HTMLImageElement;
 
-    const originalWidth = (imgSource as HTMLImageElement).width || (imgSource as HTMLImageElement).naturalWidth || (imgSource as ImageBitmap).width;
-    const originalHeight = (imgSource as HTMLImageElement).height || (imgSource as HTMLImageElement).naturalHeight || (imgSource as ImageBitmap).height;
-
-    let targetWidth = originalWidth;
-    let targetHeight = originalHeight;
-    const MAX_EDGE = 1600;
-
-    if (originalWidth > MAX_EDGE || originalHeight > MAX_EDGE) {
-      if (originalWidth > originalHeight) {
-        targetWidth = MAX_EDGE;
-        targetHeight = Math.round((originalHeight * MAX_EDGE) / originalWidth);
-      } else {
-        targetHeight = MAX_EDGE;
-        targetWidth = Math.round((originalWidth * MAX_EDGE) / originalHeight);
+      try {
+        // Modern approach: Handles EXIF rotation automatically
+        imgSource = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      } catch {
+        // Fallback for older browsers or if createImageBitmap fails
+        imgSource = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = URL.createObjectURL(file);
+        });
       }
-    }
 
-    const canvas = document.createElement('canvas');
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-    const ctx = canvas.getContext('2d');
+      const originalWidth = (imgSource as HTMLImageElement).width || (imgSource as HTMLImageElement).naturalWidth || (imgSource as ImageBitmap).width;
+      const originalHeight = (imgSource as HTMLImageElement).height || (imgSource as HTMLImageElement).naturalHeight || (imgSource as ImageBitmap).height;
 
-    if (!ctx) {
-      throw new Error('Could not get canvas context');
-    }
+      let targetWidth = originalWidth;
+      let targetHeight = originalHeight;
+      const MAX_EDGE = 1600;
 
-    ctx.drawImage(imgSource, 0, 0, targetWidth, targetHeight);
+      if (originalWidth > MAX_EDGE || originalHeight > MAX_EDGE) {
+        if (originalWidth > originalHeight) {
+          targetWidth = MAX_EDGE;
+          targetHeight = Math.round((originalHeight * MAX_EDGE) / originalWidth);
+        } else {
+          targetHeight = MAX_EDGE;
+          targetWidth = Math.round((originalWidth * MAX_EDGE) / originalHeight);
+        }
+      }
 
-    // Clean up object URL if we used the fallback
-    if (!(imgSource instanceof ImageBitmap)) {
-      URL.revokeObjectURL((imgSource as HTMLImageElement).src);
-    } else {
-      imgSource.close(); // Close ImageBitmap to free resources
-    }
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext('2d');
 
-    const base64DataWithPrefix = canvas.toDataURL('image/jpeg', 0.92);
-    const base64 = base64DataWithPrefix.split(',')[1];
+      if (!ctx) {
+        throw new Error('Could not get canvas context');
+      }
 
-    return {
-      base64,
-      mimeType: 'image/jpeg'
-    };
-  } catch (error) {
-    console.error('Image normalization failed, falling back to original:', error);
-    
-    // Fallback: Convert original file to base64
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const res = reader.result as string;
-        resolve(res.split(',')[1]);
+      ctx.drawImage(imgSource, 0, 0, targetWidth, targetHeight);
+
+      // Clean up object URL if we used the fallback
+      if (!(imgSource instanceof ImageBitmap)) {
+        URL.revokeObjectURL((imgSource as HTMLImageElement).src);
+      } else {
+        imgSource.close(); // Close ImageBitmap to free resources
+      }
+
+      const base64DataWithPrefix = canvas.toDataURL('image/jpeg', 0.92);
+      const base64 = base64DataWithPrefix.split(',')[1];
+
+      return {
+        base64,
+        mimeType: 'image/jpeg'
       };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    } catch (error) {
+      console.error('Image normalization failed, falling back to original:', error);
+      
+      // Fallback: Convert original file to base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const res = reader.result as string;
+          resolve(res.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
 
-    return {
-      base64,
-      mimeType: file.type
-    };
-  }
+      return {
+        base64,
+        mimeType: file.type
+      };
+    }
+  });
 }

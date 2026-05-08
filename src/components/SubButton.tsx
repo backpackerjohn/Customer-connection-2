@@ -4,12 +4,16 @@ interface Props {
   icon: React.ReactNode;
   label: string;
   onClick?: () => void;
+  disabled?: boolean;
 }
 
-export const SubButton = ({ icon, label, onClick }: Props) => (
+export const SubButton = ({ icon, label, onClick, disabled }: Props) => (
   <button 
-    onClick={onClick}
-    className="flex flex-col items-center gap-1.5 opacity-60 hover:opacity-100 transition-opacity"
+    onClick={!disabled ? onClick : undefined}
+    disabled={disabled}
+    className={`flex flex-col items-center gap-1.5 transition-opacity ${
+      disabled ? 'opacity-30' : 'opacity-60 hover:opacity-100'
+    }`}
   >
     <div className="p-2.5 bg-white shadow-sm border border-gray-100 rounded-xl">
       {icon}

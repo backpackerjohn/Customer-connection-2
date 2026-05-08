@@ -39,6 +39,8 @@ interface Props {
   activeMenu: string | null;
   isGeneratingPacket: boolean;
   isEstimatingTradeValue: boolean;
+  testDriveError: string | null;
+  valuationError: string | null;
   onBack: () => void;
   onUpdateCustomer: (updates: Partial<Customer>) => void;
   onNewNoteChange: (note: string) => void;
@@ -69,6 +71,8 @@ export function CustomerProfileView({
   activeMenu,
   isGeneratingPacket,
   isEstimatingTradeValue,
+  testDriveError,
+  valuationError,
   onBack,
   onUpdateCustomer,
   onNewNoteChange,
@@ -109,6 +113,7 @@ export function CustomerProfileView({
           onChange={onUpdateCustomer} 
           onTradeEstimate={onTradeEstimate}
           isEstimatingTradeValue={isEstimatingTradeValue}
+          valuationError={valuationError}
         />
         <GoalsSection customer={currentCustomer} onChange={onUpdateCustomer} />
         <TimelineNotesSection 
@@ -196,6 +201,7 @@ export function CustomerProfileView({
                 } 
                 label="Test Drive" 
                 onClick={isGeneratingPacket ? undefined : onTestDrive}
+                disabled={!currentCustomer.id || isGeneratingPacket}
               />
               <SubButton icon={<CheckCircle size={20} />} label="Sold" />
             </motion.div>
@@ -224,6 +230,19 @@ export function CustomerProfileView({
           )}
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {testDriveError && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="fixed bottom-28 md:bottom-12 left-1/2 -translate-x-1/2 z-[60] px-6 py-2.5 bg-red-500 text-white text-sm font-bold rounded-full shadow-lg whitespace-nowrap max-w-[90vw]"
+          >
+            {testDriveError}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

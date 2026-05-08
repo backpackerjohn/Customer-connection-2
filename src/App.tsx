@@ -45,7 +45,10 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isGeneratingPacket, setIsGeneratingPacket] = useState(false);
   const [isEstimatingTradeValue, setIsEstimatingTradeValue] = useState(false);
+  const [testDriveError, setTestDriveError] = useState<string | null>(null);
+  const [valuationError, setValuationError] = useState<string | null>(null);
   const requestTokenRef = useRef<number>(0);
+  const currentCustomerIdRef = useRef<string | undefined>(currentCustomer.id);
   const [pendingAINotes, setPendingAINotes] = useState<string[]>([]);
   const [pendingImages, setPendingImages] = useState<{ 
     type: 'license' | 'insurance', 
@@ -59,6 +62,10 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    currentCustomerIdRef.current = currentCustomer.id;
+  }, [currentCustomer.id]);
 
   // Auto-save effect
   useEffect(() => {
@@ -176,6 +183,16 @@ export default function App() {
     setSaveStatus('idle');
   };
 
+  const showTestDriveError = (msg: string) => {
+    setTestDriveError(msg);
+    setTimeout(() => setTestDriveError(null), 4000);
+  };
+
+  const showValuationError = (msg: string) => {
+    setValuationError(msg);
+    setTimeout(() => setValuationError(null), 4000);
+  };
+
   const handleAddNote = async () => {
     if (!user || !currentCustomer.id || !newNote.trim()) return;
 
@@ -192,10 +209,6 @@ export default function App() {
   };
 
   const handleTestDrive = async () => {
-    if (!currentCustomer.id) {
-      alert('Save the customer first by entering at least a name.');
-      return;
-    }
     if (isGeneratingPacket) return;
     
     setIsGeneratingPacket(true);
@@ -208,14 +221,14 @@ export default function App() {
       if (!tda.exists) missing.push('Test Drive Agreement');
       if (!interview.exists) missing.push('Customer Interview Sheet');
       if (missing.length > 0) {
-        alert(`Not uploaded: ${missing.join(' and ')}. Go to Settings → Forms.`);
+        showTestDriveError(`Upload ${missing.join(' and ')} in Settings → Forms.`);
         return;
       }
       const bytes = await buildTestDrivePacket(currentCustomer);
       downloadPdfBytes(bytes, packetFilename(currentCustomer));
     } catch (err) {
       console.error('Test Drive packet generation failed:', err);
-      alert('Could not generate Test Drive packet. Check console.');
+      showTestDriveError('Could not generate packet. See console for details.');
     } finally {
       setIsGeneratingPacket(false);
     }
@@ -241,7 +254,7 @@ export default function App() {
       const result = await getTradeValuation(input, options);
       
       // DISCARD if stale
-      if (token !== requestTokenRef.current || currentCustomer.id !== capturedId) {
+      if (token !== requestTokenRef.current || currentCustomerIdRef.current !== capturedId) {
         return;
       }
 
@@ -254,11 +267,11 @@ export default function App() {
           tradeValueAt: new Date().toISOString() 
         });
       } else {
-        alert("Couldn't find valuation data. You can enter values manually.");
+        showValuationError("No data found for this VIN. Enter manually if needed.");
       }
     } catch (err) {
       console.error('Trade estimate failed:', err);
-      alert("An error occurred while finding valuation data.");
+      showValuationError('Estimate failed. Please try again.');
     } finally {
       if (token === requestTokenRef.current) {
         setIsEstimatingTradeValue(false);
@@ -373,6 +386,8 @@ export default function App() {
               activeMenu={activeMenu}
               isGeneratingPacket={isGeneratingPacket}
               isEstimatingTradeValue={isEstimatingTradeValue}
+              testDriveError={testDriveError}
+              valuationError={valuationError}
               onBack={() => setView('dashboard')}
               onUpdateCustomer={updateCustomerState}
               onNewNoteChange={setNewNote}

@@ -19,6 +19,7 @@ interface Props {
     options?: { skipCache?: boolean }
   ) => void;
   isEstimating: boolean;
+  valuationError: string | null;
 }
 
 const CONDITIONS = [
@@ -28,25 +29,13 @@ const CONDITIONS = [
   { id: 'fair', label: 'Fair' },
 ] as const;
 
-function formatRelativeTime(iso: string | undefined, now: number): string {
-  if (!iso) return '';
-  const date = new Date(iso);
-  const diff = Math.floor((now - date.getTime()) / 1000);
-  
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
 function humanizeCondition(condition?: string): string {
   if (!condition) return '';
   return condition.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
-export function TradeEquityPanel({ customer, onChange, onEstimate, isEstimating }: Props) {
-  const [now] = React.useState(() => Date.now());
-  const canEstimate = customer.tradeVin && customer.tradeMileage && (customer.tradeValueCondition || true);
+export function TradeEquityPanel({ customer, onChange, onEstimate, isEstimating, valuationError }: Props) {
+  const canEstimate = customer.tradeVin && customer.tradeMileage;
   const selectedCondition = customer.tradeValueCondition || 'good';
 
   const handleManualEdit = (patch: Partial<Customer>) => {
@@ -65,11 +54,6 @@ export function TradeEquityPanel({ customer, onChange, onEstimate, isEstimating 
   const lowEquity = lowVal - payoff;
   const highEquity = highVal - payoff;
   
-  const isStale = React.useMemo(() => {
-    if (!customer.tradeValueAt) return false;
-    return (now - new Date(customer.tradeValueAt).getTime() > 86_400_000);
-  }, [customer.tradeValueAt, now]);
-
   const getEstimateInput = () => ({
     vin: customer.tradeVin || '',
     year: customer.tradeYear || '',
@@ -132,6 +116,12 @@ export function TradeEquityPanel({ customer, onChange, onEstimate, isEstimating 
         )}
       </button>
 
+      {valuationError && (
+        <div className="text-center">
+          <span className="text-xs text-red-500 font-bold">{valuationError}</span>
+        </div>
+      )}
+
       {/* Estimate Display */}
       {hasEstimate && (
         <div className="space-y-4 pt-2">
@@ -140,10 +130,8 @@ export function TradeEquityPanel({ customer, onChange, onEstimate, isEstimating 
               ${lowVal.toLocaleString()} – ${highVal.toLocaleString()}
             </div>
             <div className="flex flex-col text-xs text-gray-500 font-medium">
-              <span>Per {customer.tradeValueSource}</span>
-              <span>{humanizeCondition(selectedCondition)} condition</span>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span>Updated {formatRelativeTime(customer.tradeValueAt, now)}</span>
+              <div className="flex items-center gap-2">
+                <span>Per {customer.tradeValueSource}</span>
                 <button
                   onClick={() => onEstimate(getEstimateInput(), { skipCache: true })}
                   disabled={isEstimating}
@@ -153,11 +141,7 @@ export function TradeEquityPanel({ customer, onChange, onEstimate, isEstimating 
                   <RefreshCw size={12} className={isEstimating ? 'animate-spin' : ''} />
                 </button>
               </div>
-              {isStale && (
-                <div className="mt-1.5 self-start px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
-                  Older than 24h — consider refreshing
-                </div>
-              )}
+              <span>{humanizeCondition(selectedCondition)} condition</span>
             </div>
           </div>
           

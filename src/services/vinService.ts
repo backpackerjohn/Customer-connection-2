@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ImageData } from "./aiService";
+import { timed } from "../lib/timing";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
@@ -22,7 +23,9 @@ export async function decodeVin(vin: string): Promise<VinDetails | null> {
   if (!vin || vin.length !== 17) return null;
 
   try {
-    const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${vin}?format=json`);
+    const response = await timed('vinService.decodeVin (NHTSA)', async () => {
+      return await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${vin}?format=json`);
+    });
     if (!response.ok) return null;
 
     const data = await response.json();
@@ -56,24 +59,26 @@ export async function readVinFromImage(image: ImageData): Promise<VinImageResult
   const systemInstruction = "You read VINs off photographs. A VIN is exactly 17 characters, uppercase letters and digits, and never contains the letters I, O, or Q (those positions are always digits). Return only the VIN string you can read with confidence. If the image is blurry, partially obscured, or you cannot read 17 valid characters, return an empty string. Do not guess.";
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        { role: 'user', parts: [image] }
-      ],
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            vin: { type: Type.STRING },
-            confidence: { type: Type.STRING, enum: ["high", "low"] }
-          },
-          propertyOrdering: ["vin", "confidence"],
-          required: ["vin", "confidence"]
+    const response = await timed('vinService.readVinFromImage (Gemini OCR)', async () => {
+      return await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          { role: 'user', parts: [image] }
+        ],
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              vin: { type: Type.STRING },
+              confidence: { type: Type.STRING, enum: ["high", "low"] }
+            },
+            propertyOrdering: ["vin", "confidence"],
+            required: ["vin", "confidence"]
+          }
         }
-      }
+      });
     });
 
     const resultText = response.text || "{}";

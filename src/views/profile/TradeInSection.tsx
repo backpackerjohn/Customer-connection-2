@@ -24,9 +24,10 @@ interface Props {
     options?: { skipCache?: boolean }
   ) => void;
   isEstimatingTradeValue: boolean;
+  valuationError: string | null;
 }
 
-export function TradeInSection({ customer, onChange, onTradeEstimate, isEstimatingTradeValue }: Props) {
+export function TradeInSection({ customer, onChange, onTradeEstimate, isEstimatingTradeValue, valuationError }: Props) {
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-2 px-2">
@@ -149,6 +150,7 @@ export function TradeInSection({ customer, onChange, onTradeEstimate, isEstimati
               onChange={onChange} 
               onEstimate={onTradeEstimate}
               isEstimating={isEstimatingTradeValue}
+              valuationError={valuationError}
             />
           </motion.div>
         )}

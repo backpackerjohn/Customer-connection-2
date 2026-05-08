@@ -20,6 +20,8 @@ export interface ImageData {
   };
 }
 
+import { timed } from '../lib/timing';
+
 export async function processCustomerChat(
   userInput: string,
   currentData: Partial<Customer>,
@@ -77,88 +79,90 @@ export async function processCustomerChat(
   `;
 
   try {
-    const promptParts: unknown[] = [{ text: userInput }];
+    const promptParts: ({ text: string } | ImageData)[] = [{ text: userInput }];
     if (image) {
       promptParts.push(image);
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        ...chatHistory,
-        { role: 'user', parts: promptParts }
-      ],
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            updatedFields: { 
-              type: Type.OBJECT,
-              properties: {
-                firstName: { type: Type.STRING },
-                middleInitial: { type: Type.STRING },
-                lastName: { type: Type.STRING },
-                dob: { type: Type.STRING },
-                phone: { type: Type.STRING },
-                email: { type: Type.STRING },
-                address: { type: Type.STRING },
-                city: { type: Type.STRING },
-                state: { type: Type.STRING },
-                zip: { type: Type.STRING },
-                dlNumber: { type: Type.STRING },
-                dlState: { type: Type.STRING },
-                dlExpiration: { type: Type.STRING },
-                vehicleStock: { type: Type.STRING },
-                vehicleYear: { type: Type.STRING },
-                vehicleMake: { type: Type.STRING },
-                vehicleModel: { type: Type.STRING },
-                vehicleVin: { type: Type.STRING },
-                vehicleMiles: { type: Type.STRING },
-                insuranceCompany: { type: Type.STRING },
-                agentName: { type: Type.STRING },
-                hasTradeIn: { type: Type.BOOLEAN },
-                tradeYear: { type: Type.STRING },
-                tradeMake: { type: Type.STRING },
-                tradeModel: { type: Type.STRING },
-                tradeTrim: { type: Type.STRING },
-                tradeMileage: { type: Type.STRING },
-                tradeVin: { type: Type.STRING },
-                stillOwe: { type: Type.BOOLEAN },
-                lienholder: { type: Type.STRING },
-                payoffAmount: { type: Type.STRING },
-                monthlyPayment: { type: Type.STRING },
-                monthsRemaining: { type: Type.STRING },
-                goalsMonthlyPayment: { type: Type.STRING },
-                goalsMoneyDown: { type: Type.STRING },
-                goalsCreditScore: { type: Type.STRING },
-                customerDesiredTradeValue: { type: Type.STRING },
-                status: { type: Type.STRING, enum: ["active", "inactive", "lead"] }
+    const response = await timed('aiService.processCustomerChat', async () => {
+      return await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [
+          ...chatHistory,
+          { role: 'user', parts: promptParts }
+        ],
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              updatedFields: { 
+                type: Type.OBJECT,
+                properties: {
+                  firstName: { type: Type.STRING },
+                  middleInitial: { type: Type.STRING },
+                  lastName: { type: Type.STRING },
+                  dob: { type: Type.STRING },
+                  phone: { type: Type.STRING },
+                  email: { type: Type.STRING },
+                  address: { type: Type.STRING },
+                  city: { type: Type.STRING },
+                  state: { type: Type.STRING },
+                  zip: { type: Type.STRING },
+                  dlNumber: { type: Type.STRING },
+                  dlState: { type: Type.STRING },
+                  dlExpiration: { type: Type.STRING },
+                  vehicleStock: { type: Type.STRING },
+                  vehicleYear: { type: Type.STRING },
+                  vehicleMake: { type: Type.STRING },
+                  vehicleModel: { type: Type.STRING },
+                  vehicleVin: { type: Type.STRING },
+                  vehicleMiles: { type: Type.STRING },
+                  insuranceCompany: { type: Type.STRING },
+                  agentName: { type: Type.STRING },
+                  hasTradeIn: { type: Type.BOOLEAN },
+                  tradeYear: { type: Type.STRING },
+                  tradeMake: { type: Type.STRING },
+                  tradeModel: { type: Type.STRING },
+                  tradeTrim: { type: Type.STRING },
+                  tradeMileage: { type: Type.STRING },
+                  tradeVin: { type: Type.STRING },
+                  stillOwe: { type: Type.BOOLEAN },
+                  lienholder: { type: Type.STRING },
+                  payoffAmount: { type: Type.STRING },
+                  monthlyPayment: { type: Type.STRING },
+                  monthsRemaining: { type: Type.STRING },
+                  goalsMonthlyPayment: { type: Type.STRING },
+                  goalsMoneyDown: { type: Type.STRING },
+                  goalsCreditScore: { type: Type.STRING },
+                  customerDesiredTradeValue: { type: Type.STRING },
+                  status: { type: Type.STRING, enum: ["active", "inactive", "lead"] }
+                },
+                propertyOrdering: [
+                  "firstName", "middleInitial", "lastName", "dob", "phone", "email",
+                  "address", "city", "state", "zip", "dlNumber", "dlState", "dlExpiration",
+                  "vehicleStock", "vehicleYear", "vehicleMake", "vehicleModel", "vehicleVin", "vehicleMiles",
+                  "insuranceCompany", "agentName", "hasTradeIn", "tradeYear", "tradeMake",
+                  "tradeModel", "tradeTrim", "tradeMileage", "tradeVin", "stillOwe",
+                  "lienholder", "payoffAmount", "monthlyPayment", "monthsRemaining",
+                  "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status"
+                ]
               },
-              propertyOrdering: [
-                "firstName", "middleInitial", "lastName", "dob", "phone", "email",
-                "address", "city", "state", "zip", "dlNumber", "dlState", "dlExpiration",
-                "vehicleStock", "vehicleYear", "vehicleMake", "vehicleModel", "vehicleVin", "vehicleMiles",
-                "insuranceCompany", "agentName", "hasTradeIn", "tradeYear", "tradeMake",
-                "tradeModel", "tradeTrim", "tradeMileage", "tradeVin", "stillOwe",
-                "lienholder", "payoffAmount", "monthlyPayment", "monthsRemaining",
-                "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status"
-              ]
+              inventoryStockFound: { type: Type.STRING, description: "If a vehicle stock number is found in the text or image, put it here." },
+              message: { type: Type.STRING },
+              hasGoodNotes: { type: Type.BOOLEAN },
+              notesSummary: { type: Type.STRING },
+              documentType: { 
+                type: Type.STRING, 
+                enum: ['license', 'insurance', 'window_sticker', 'other'] 
+              }
             },
-            inventoryStockFound: { type: Type.STRING, description: "If a vehicle stock number is found in the text or image, put it here." },
-            message: { type: Type.STRING },
-            hasGoodNotes: { type: Type.BOOLEAN },
-            notesSummary: { type: Type.STRING },
-            documentType: { 
-              type: Type.STRING, 
-              enum: ['license', 'insurance', 'window_sticker', 'other'] 
-            }
-          },
-          propertyOrdering: ["updatedFields", "inventoryStockFound", "message", "hasGoodNotes", "notesSummary", "documentType"],
-          required: ["updatedFields", "message", "hasGoodNotes"]
+            propertyOrdering: ["updatedFields", "inventoryStockFound", "message", "hasGoodNotes", "notesSummary", "documentType"],
+            required: ["updatedFields", "message", "hasGoodNotes"]
+          }
         }
-      }
+      });
     });
 
     const resultText = response.text || '{}';

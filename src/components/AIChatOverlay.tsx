@@ -200,7 +200,7 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] md:hidden"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60]"
           />
 
           {/* Chat Sheet (Mobile) */}
@@ -209,7 +209,7 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed inset-x-0 bottom-0 top-20 bg-white rounded-t-[32px] z-[70] flex flex-col shadow-2xl md:hidden"
+            className="fixed inset-x-0 bottom-0 top-20 bg-white rounded-t-[32px] z-[70] flex flex-col shadow-2xl"
           >
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">

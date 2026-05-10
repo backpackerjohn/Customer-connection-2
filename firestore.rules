@@ -78,6 +78,14 @@ service cloud.firestore {
         && (data.get('goalsCreditScore', '') is string && data.get('goalsCreditScore', '').size() <= 20)
         && (data.get('tradeValueLow', '') is string && data.get('tradeValueLow', '').size() <= 20)
         && (data.get('tradeValueHigh', '') is string && data.get('tradeValueHigh', '').size() <= 20)
+        && (data.get('tradeValueExcellentLow', '') is string && data.get('tradeValueExcellentLow', '').size() <= 20)
+        && (data.get('tradeValueExcellentHigh', '') is string && data.get('tradeValueExcellentHigh', '').size() <= 20)
+        && (data.get('tradeValueVeryGoodLow', '') is string && data.get('tradeValueVeryGoodLow', '').size() <= 20)
+        && (data.get('tradeValueVeryGoodHigh', '') is string && data.get('tradeValueVeryGoodHigh', '').size() <= 20)
+        && (data.get('tradeValueGoodLow', '') is string && data.get('tradeValueGoodLow', '').size() <= 20)
+        && (data.get('tradeValueGoodHigh', '') is string && data.get('tradeValueGoodHigh', '').size() <= 20)
+        && (data.get('tradeValueFairLow', '') is string && data.get('tradeValueFairLow', '').size() <= 20)
+        && (data.get('tradeValueFairHigh', '') is string && data.get('tradeValueFairHigh', '').size() <= 20)
         && (data.get('tradeValueSource', '') is string && data.get('tradeValueSource', '').size() <= 100)
         && (data.get('tradeValueCondition', '') is string && data.get('tradeValueCondition', '').size() <= 20)
         && (data.get('tradeValueAt', '') is string && data.get('tradeValueAt', '').size() <= 30)
@@ -118,7 +126,12 @@ service cloud.firestore {
             'hasTradeIn', 'tradeYear', 'tradeMake', 'tradeModel', 'tradeTrim', 'tradeMileage',
             'tradeVin', 'stillOwe', 'lienholder', 'payoffAmount', 'monthlyPayment',
             'monthsRemaining', 'goalsMonthlyPayment', 'goalsMoneyDown', 'goalsCreditScore',
-            'tradeValueLow', 'tradeValueHigh', 'tradeValueSource', 'tradeValueCondition',
+            'tradeValueLow', 'tradeValueHigh',
+            'tradeValueExcellentLow', 'tradeValueExcellentHigh',
+            'tradeValueVeryGoodLow', 'tradeValueVeryGoodHigh',
+            'tradeValueGoodLow', 'tradeValueGoodHigh',
+            'tradeValueFairLow', 'tradeValueFairHigh',
+            'tradeValueSource', 'tradeValueCondition',
             'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt'
           ])
         )

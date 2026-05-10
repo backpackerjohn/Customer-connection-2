@@ -19,7 +19,6 @@ interface Props {
       model: string; 
       trim: string; 
       mileage: string; 
-      condition: 'excellent' | 'very_good' | 'good' | 'fair'; 
     },
     options?: { skipCache?: boolean }
   ) => void;

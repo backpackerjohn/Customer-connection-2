@@ -175,11 +175,27 @@ describe('Firestore rules — Customer collection', () => {
     );
   });
 
-  it('14. Resource Poisoning (TradeValueSource) — rejects > 100 chars', async () => {
+  it('14. New Trade Condition Tiers — owner can write all 8 per-condition fields', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'customers/trade2'), validCustomer({
+        tradeValueExcellentLow: '18000',
+        tradeValueExcellentHigh: '20000',
+        tradeValueVeryGoodLow: '17000',
+        tradeValueVeryGoodHigh: '19000',
+        tradeValueGoodLow: '16000',
+        tradeValueGoodHigh: '18000',
+        tradeValueFairLow: '14000',
+        tradeValueFairHigh: '16000'
+      }))
+    );
+  });
+
+  it('15. Resource Poisoning (TradeValueSource) — rejects > 100 chars', async () => {
     const aliceDb = aliceContext().firestore();
     const longSource = 'a'.repeat(101);
     await assertFails(
-      setDoc(doc(aliceDb, 'customers/trade2'), validCustomer({
+      setDoc(doc(aliceDb, 'customers/trade3'), validCustomer({
         tradeValueSource: longSource
       }))
     );

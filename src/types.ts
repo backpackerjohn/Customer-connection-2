@@ -37,6 +37,14 @@ export interface Customer {
   tradeVin?: string;
   tradeValueLow?: string;
   tradeValueHigh?: string;
+  tradeValueExcellentLow?: string;
+  tradeValueExcellentHigh?: string;
+  tradeValueVeryGoodLow?: string;
+  tradeValueVeryGoodHigh?: string;
+  tradeValueGoodLow?: string;
+  tradeValueGoodHigh?: string;
+  tradeValueFairLow?: string;
+  tradeValueFairHigh?: string;
   tradeValueSource?: string;
   tradeValueCondition?: 'excellent' | 'very_good' | 'good' | 'fair';
   tradeValueAt?: string;

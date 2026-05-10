@@ -242,7 +242,6 @@ export default function App() {
       model: string; 
       trim: string; 
       mileage: string; 
-      condition: 'excellent' | 'very_good' | 'good' | 'fair'; 
     },
     options?: { skipCache?: boolean }
   ) => {
@@ -260,11 +259,18 @@ export default function App() {
 
       if (result) {
         updateCustomerState({ 
-          tradeValueLow: result.low, 
-          tradeValueHigh: result.high, 
+          tradeValueExcellentLow: result.excellent.low,
+          tradeValueExcellentHigh: result.excellent.high,
+          tradeValueVeryGoodLow: result.veryGood.low,
+          tradeValueVeryGoodHigh: result.veryGood.high,
+          tradeValueGoodLow: result.good.low,
+          tradeValueGoodHigh: result.good.high,
+          tradeValueFairLow: result.fair.low,
+          tradeValueFairHigh: result.fair.high,
           tradeValueSource: result.source, 
-          tradeValueCondition: input.condition, 
-          tradeValueAt: new Date().toISOString() 
+          tradeValueAt: new Date().toISOString(),
+          // Default condition if not set
+          ...(!currentCustomer.tradeValueCondition ? { tradeValueCondition: 'good' as const } : {})
         });
       } else {
         showValuationError("No data found for this VIN. Enter manually if needed.");

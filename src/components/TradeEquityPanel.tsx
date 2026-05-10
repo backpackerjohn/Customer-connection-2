@@ -14,7 +14,6 @@ interface Props {
       model: string; 
       trim: string; 
       mileage: string; 
-      condition: 'excellent' | 'very_good' | 'good' | 'fair'; 
     },
     options?: { skipCache?: boolean }
   ) => void;
@@ -38,19 +37,53 @@ export function TradeEquityPanel({ customer, onChange, onEstimate, isEstimating,
   const canEstimate = customer.tradeVin && customer.tradeMileage;
   const selectedCondition = customer.tradeValueCondition || 'good';
 
-  const handleManualEdit = (patch: Partial<Customer>) => {
+  const getDisplayedRange = (c: Customer) => {
+    const cond = c.tradeValueCondition || 'good';
+    switch (cond) {
+      case 'excellent': return { low: c.tradeValueExcellentLow ?? '', high: c.tradeValueExcellentHigh ?? '' };
+      case 'very_good': return { low: c.tradeValueVeryGoodLow ?? '',  high: c.tradeValueVeryGoodHigh ?? '' };
+      case 'good':      return { low: c.tradeValueGoodLow ?? '',      high: c.tradeValueGoodHigh ?? '' };
+      case 'fair':      return { low: c.tradeValueFairLow ?? '',      high: c.tradeValueFairHigh ?? '' };
+      default:          return { low: '', high: '' };
+    }
+  };
+
+  const handleLowEdit = (newValue: string) => {
+    const fieldMapping = {
+      excellent: 'tradeValueExcellentLow',
+      very_good: 'tradeValueVeryGoodLow',
+      good: 'tradeValueGoodLow',
+      fair: 'tradeValueFairLow'
+    } as const;
+    
     onChange({
-      ...patch,
+      [fieldMapping[selectedCondition]]: newValue,
+      tradeValueSource: 'Manual override',
+      tradeValueAt: new Date().toISOString()
+    });
+  };
+
+  const handleHighEdit = (newValue: string) => {
+    const fieldMapping = {
+      excellent: 'tradeValueExcellentHigh',
+      very_good: 'tradeValueVeryGoodHigh',
+      good: 'tradeValueGoodHigh',
+      fair: 'tradeValueFairHigh'
+    } as const;
+    
+    onChange({
+      [fieldMapping[selectedCondition]]: newValue,
       tradeValueSource: 'Manual override',
       tradeValueAt: new Date().toISOString()
     });
   };
 
   const payoff = parseFloat(customer.payoffAmount || '0');
-  const lowVal = parseFloat(customer.tradeValueLow || '0');
-  const highVal = parseFloat(customer.tradeValueHigh || '0');
+  const { low: currentLow, high: currentHigh } = getDisplayedRange(customer);
+  const lowVal = parseFloat(currentLow || '0');
+  const highVal = parseFloat(currentHigh || '0');
   
-  const hasEstimate = !!(customer.tradeValueLow || customer.tradeValueHigh);
+  const hasEstimate = !!(currentLow || currentHigh);
   const lowEquity = lowVal - payoff;
   const highEquity = highVal - payoff;
   
@@ -60,8 +93,7 @@ export function TradeEquityPanel({ customer, onChange, onEstimate, isEstimating,
     make: customer.tradeMake || '',
     model: customer.tradeModel || '',
     trim: customer.tradeTrim || '',
-    mileage: customer.tradeMileage || '',
-    condition: selectedCondition as 'excellent' | 'very_good' | 'good' | 'fair'
+    mileage: customer.tradeMileage || ''
   });
 
   const equityColor = (lowEquity > 0 && highEquity > 0) 
@@ -156,13 +188,13 @@ export function TradeEquityPanel({ customer, onChange, onEstimate, isEstimating,
       <div className="grid grid-cols-2 gap-4">
         <InputField 
           label="Low Estimate" 
-          value={customer.tradeValueLow} 
-          onChange={v => handleManualEdit({ tradeValueLow: v })} 
+          value={getDisplayedRange(customer).low} 
+          onChange={v => handleLowEdit(v)} 
         />
         <InputField 
           label="High Estimate" 
-          value={customer.tradeValueHigh} 
-          onChange={v => handleManualEdit({ tradeValueHigh: v })} 
+          value={getDisplayedRange(customer).high} 
+          onChange={v => handleHighEdit(v)} 
         />
       </div>
 

@@ -58,7 +58,9 @@ export async function getFormFileMetadata(
       updated: meta.updated ? new Date(meta.updated) : undefined,
       sizeBytes: meta.size,
     };
-  } catch {
+  } catch (err) {
+    const code = (err && typeof err === 'object' && 'code' in err) ? (err as { code: string }).code : 'unknown';
+    console.warn(`[getFormFileMetadata] failed for forms/${filename}: code=${code}`, err);
     return { exists: false };
   }
 }

@@ -53,6 +53,7 @@ service cloud.firestore {
         && (data.get('dlNumber', '') is string && data.get('dlNumber', '').size() <= 50)
         && (data.get('dlState', '') is string && data.get('dlState', '').size() <= 50)
         && (data.get('dlExpiration', '') is string && data.get('dlExpiration', '').size() <= 20)
+        && (data.get('dlImageUrl', '') is string && data.get('dlImageUrl', '').size() <= 1024)
         && (data.get('vehicleStock', '') is string && data.get('vehicleStock', '').size() <= 50)
         && (data.get('vehicleYear', '') is string && data.get('vehicleYear', '').size() <= 10)
         && (data.get('vehicleMake', '') is string && data.get('vehicleMake', '').size() <= 50)
@@ -60,6 +61,7 @@ service cloud.firestore {
         && (data.get('vehicleVin', '') is string && data.get('vehicleVin', '').size() <= 50)
         && (data.get('vehicleMiles', '') is string && data.get('vehicleMiles', '').size() <= 20)
         && (data.get('insuranceCompany', '') is string && data.get('insuranceCompany', '').size() <= 100)
+        && (data.get('insuranceImageUrl', '') is string && data.get('insuranceImageUrl', '').size() <= 1024)
         && (data.get('agentName', '') is string && data.get('agentName', '').size() <= 100)
         && (data.get('tradeYear', '') is string && data.get('tradeYear', '').size() <= 10)
         && (data.get('tradeMake', '') is string && data.get('tradeMake', '').size() <= 50)
@@ -73,7 +75,21 @@ service cloud.firestore {
         && (data.get('monthsRemaining', '') is string && data.get('monthsRemaining', '').size() <= 20)
         && (data.get('goalsMonthlyPayment', '') is string && data.get('goalsMonthlyPayment', '').size() <= 50)
         && (data.get('goalsMoneyDown', '') is string && data.get('goalsMoneyDown', '').size() <= 20)
-        && (data.get('goalsCreditScore', '') is string && data.get('goalsCreditScore', '').size() <= 20);
+        && (data.get('goalsCreditScore', '') is string && data.get('goalsCreditScore', '').size() <= 20)
+        && (data.get('tradeValueLow', '') is string && data.get('tradeValueLow', '').size() <= 20)
+        && (data.get('tradeValueHigh', '') is string && data.get('tradeValueHigh', '').size() <= 20)
+        && (data.get('tradeValueExcellentLow', '') is string && data.get('tradeValueExcellentLow', '').size() <= 20)
+        && (data.get('tradeValueExcellentHigh', '') is string && data.get('tradeValueExcellentHigh', '').size() <= 20)
+        && (data.get('tradeValueVeryGoodLow', '') is string && data.get('tradeValueVeryGoodLow', '').size() <= 20)
+        && (data.get('tradeValueVeryGoodHigh', '') is string && data.get('tradeValueVeryGoodHigh', '').size() <= 20)
+        && (data.get('tradeValueGoodLow', '') is string && data.get('tradeValueGoodLow', '').size() <= 20)
+        && (data.get('tradeValueGoodHigh', '') is string && data.get('tradeValueGoodHigh', '').size() <= 20)
+        && (data.get('tradeValueFairLow', '') is string && data.get('tradeValueFairLow', '').size() <= 20)
+        && (data.get('tradeValueFairHigh', '') is string && data.get('tradeValueFairHigh', '').size() <= 20)
+        && (data.get('tradeValueSource', '') is string && data.get('tradeValueSource', '').size() <= 100)
+        && (data.get('tradeValueCondition', '') is string && data.get('tradeValueCondition', '').size() <= 20)
+        && (data.get('tradeValueAt', '') is string && data.get('tradeValueAt', '').size() <= 30)
+        && (data.get('customerDesiredTradeValue', '') is string && data.get('customerDesiredTradeValue', '').size() <= 20);
     }
 
     function isValidNote(data) {
@@ -105,11 +121,18 @@ service cloud.firestore {
         && (
           incoming().diff(existing()).affectedKeys().hasOnly([
             'firstName', 'middleInitial', 'lastName', 'dob', 'phone', 'email', 'address', 'city', 'state', 'zip',
-            'dlNumber', 'dlState', 'dlExpiration', 'vehicleStock', 'vehicleYear', 'vehicleMake',
-            'vehicleModel', 'vehicleVin', 'vehicleMiles', 'insuranceCompany', 'agentName',
+            'dlNumber', 'dlState', 'dlExpiration', 'dlImageUrl', 'vehicleStock', 'vehicleYear', 'vehicleMake',
+            'vehicleModel', 'vehicleVin', 'vehicleMiles', 'insuranceCompany', 'insuranceImageUrl', 'agentName',
             'hasTradeIn', 'tradeYear', 'tradeMake', 'tradeModel', 'tradeTrim', 'tradeMileage',
             'tradeVin', 'stillOwe', 'lienholder', 'payoffAmount', 'monthlyPayment',
-            'monthsRemaining', 'goalsMonthlyPayment', 'goalsMoneyDown', 'goalsCreditScore', 'status', 'updatedAt'
+            'monthsRemaining', 'goalsMonthlyPayment', 'goalsMoneyDown', 'goalsCreditScore',
+            'tradeValueLow', 'tradeValueHigh',
+            'tradeValueExcellentLow', 'tradeValueExcellentHigh',
+            'tradeValueVeryGoodLow', 'tradeValueVeryGoodHigh',
+            'tradeValueGoodLow', 'tradeValueGoodHigh',
+            'tradeValueFairLow', 'tradeValueFairHigh',
+            'tradeValueSource', 'tradeValueCondition',
+            'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt'
           ])
         )
         && incoming().updatedAt == request.time;

@@ -52,7 +52,7 @@ export async function getTradeValuation(
     }
   }
 
-  const systemInstruction = `"You are a vehicle valuation assistant for a car dealership in Chillicothe, Ohio (ZIP ${DEALER_ZIP}). Given a vehicle's details, find its current TRADE-IN (wholesale) values across ALL FOUR condition tiers in the local market — within ${SEARCH_RADIUS_MILES} miles of ZIP ${DEALER_ZIP}.
+  const systemInstruction = `You are a vehicle valuation assistant for a car dealership in Chillicothe, Ohio (ZIP ${DEALER_ZIP}). Given a vehicle's details, find its current TRADE-IN (wholesale) values across ALL FOUR condition tiers in the local market — within ${SEARCH_RADIUS_MILES} miles of ZIP ${DEALER_ZIP}.
 
 CRITICAL: Return TRADE-IN / WHOLESALE values, NOT retail and NOT private-party. These are different numbers. The trade-in value is what a dealer would pay the customer for the vehicle.
 
@@ -76,7 +76,7 @@ If you cannot find data from at least one of the listed sources, return empty st
 
 Always include this exact phrase in 'notes': 'Pending physical inspection — not a binding offer.'
 
-Format low and high as plain numeric strings with no $ or commas (e.g., '12400'). The UI handles display formatting."
+Format low and high as plain numeric strings with no $ or commas (e.g., '12400'). The UI handles display formatting.
 
 Format output as JSON:
 { "excellent": {"low":"...","high":"..."}, "very_good": {"low":"...","high":"..."}, "good": {"low":"...","high":"..."}, "fair": {"low":"...","high":"..."}, "source":"...", "notes":"..." }`;
@@ -92,7 +92,7 @@ Mileage: ${request.mileage}`;
   try {
     const response = await timed('valuationService.getTradeValuation (grounded)', async () => {
       return await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         config: {
           systemInstruction,
@@ -103,11 +103,19 @@ Mileage: ${request.mileage}`;
 
     const resultText = response.text || '{}';
     let parsed: RawValuationResult;
+    const extractJson = (text: string): string => {
+      const fencedJson = text.match(/```json\s*([\s\S]*?)\s*```/i);
+      if (fencedJson) return fencedJson[1];
+      const fencedAny = text.match(/```\s*([\s\S]*?)\s*```/);
+      if (fencedAny) return fencedAny[1];
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start !== -1 && end > start) return text.substring(start, end + 1);
+      return text;
+    };
+
     try {
-      const cleaned = resultText
-        .replace(/^\s*```(?:json)?\s*/i, '')
-        .replace(/\s*```\s*$/, '')
-        .trim();
+      const cleaned = extractJson(resultText).trim();
       parsed = JSON.parse(cleaned);
     } catch (e) {
       console.error("Valuation JSON Parse Error:", e, resultText);

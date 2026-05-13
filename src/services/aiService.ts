@@ -56,6 +56,7 @@ export async function processCustomerChat(
     - tradeYear, tradeMake, tradeModel, tradeTrim, tradeMileage, tradeVin: Trade-in details
     - insuranceCompany, agentName: Insurance details
     - stillOwe, lienholder, payoffAmount, monthlyPayment, monthsRemaining: Financial details
+    - payingCash: true if the customer indicated they are paying cash for the new vehicle; false otherwise (financing or unspecified)
     - goalsMonthlyPayment, goalsMoneyDown, goalsCreditScore: Customer goals
     - customerDesiredTradeValue: Customer's desired trade-in value (what they're asking for the trade).
     - status: Customer status ("active", "inactive", "lead")
@@ -133,6 +134,7 @@ export async function processCustomerChat(
                   payoffAmount: { type: Type.STRING },
                   monthlyPayment: { type: Type.STRING },
                   monthsRemaining: { type: Type.STRING },
+                  payingCash: { type: Type.BOOLEAN },
                   goalsMonthlyPayment: { type: Type.STRING },
                   goalsMoneyDown: { type: Type.STRING },
                   goalsCreditScore: { type: Type.STRING },
@@ -145,7 +147,7 @@ export async function processCustomerChat(
                   "vehicleStock", "vehicleYear", "vehicleMake", "vehicleModel", "vehicleVin", "vehicleMiles",
                   "insuranceCompany", "agentName", "hasTradeIn", "tradeYear", "tradeMake",
                   "tradeModel", "tradeTrim", "tradeMileage", "tradeVin", "stillOwe",
-                  "lienholder", "payoffAmount", "monthlyPayment", "monthsRemaining",
+                  "lienholder", "payoffAmount", "monthlyPayment", "monthsRemaining", "payingCash",
                   "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status"
                 ]
               },

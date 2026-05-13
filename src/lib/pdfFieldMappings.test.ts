@@ -4,7 +4,7 @@ import { Customer } from '../types';
 
 const sample: Customer = {
   firstName: 'Sarah', middleInitial: 'M', lastName: 'Adams',
-  status: 'lead', hasTradeIn: false, stillOwe: false,
+  status: 'lead', hasTradeIn: false, stillOwe: false, payingCash: false,
   address: '123 Main St', city: 'Cleveland', state: 'oh', zip: '44114',
   phone: '(555) 123-4567',
   dlNumber: 'AB1234567', dlState: 'oh', dlExpiration: '2027-08-22',

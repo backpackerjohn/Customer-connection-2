@@ -50,6 +50,7 @@ export interface Customer {
   tradeValueAt?: string;
   customerDesiredTradeValue?: string;
   stillOwe: boolean;
+  payingCash: boolean;
   lienholder?: string;
   payoffAmount?: string;
   monthlyPayment?: string;
@@ -77,4 +78,5 @@ export const emptyCustomer: Customer = {
   status: 'lead',
   hasTradeIn: false,
   stillOwe: false,
+  payingCash: false,
 };

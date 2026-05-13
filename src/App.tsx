@@ -22,9 +22,17 @@ import {
   createCustomer, updateCustomer, subscribeToCustomers 
 } from './services/customersService';
 import { createNote, subscribeToNotes } from './services/notesService';
-import { buildTestDrivePacket, downloadPdfBytes, packetFilename } from './services/pdfService';
+import { 
+  buildTestDrivePacket, 
+  buildSoldPacket,
+  downloadPdfBytes, 
+  packetFilename,
+  selectSoldForms,
+  soldPacketFilename
+} from './services/pdfService';
 import { getFormFileMetadata, uploadCustomerImage } from './services/imagesService';
 import { getTradeValuation } from './services/valuationService';
+import { FORM_SLOTS } from './lib/formSlots';
 
 import { LoginView } from './views/LoginView';
 import { DashboardView } from './views/DashboardView';
@@ -44,8 +52,10 @@ export default function App() {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isGeneratingPacket, setIsGeneratingPacket] = useState(false);
+  const [isGeneratingSoldPacket, setIsGeneratingSoldPacket] = useState(false);
   const [isEstimatingTradeValue, setIsEstimatingTradeValue] = useState(false);
   const [testDriveError, setTestDriveError] = useState<string | null>(null);
+  const [soldError, setSoldError] = useState<string | null>(null);
   const [valuationError, setValuationError] = useState<string | null>(null);
   const requestTokenRef = useRef<number>(0);
   const currentCustomerIdRef = useRef<string | undefined>(currentCustomer.id);
@@ -188,6 +198,11 @@ export default function App() {
     setTimeout(() => setTestDriveError(null), 4000);
   };
 
+  const showSoldError = (msg: string) => {
+    setSoldError(msg);
+    setTimeout(() => setSoldError(null), 4000);
+  };
+
   const showValuationError = (msg: string) => {
     setValuationError(msg);
     setTimeout(() => setValuationError(null), 4000);
@@ -231,6 +246,48 @@ export default function App() {
       showTestDriveError('Could not generate packet. See console for details.');
     } finally {
       setIsGeneratingPacket(false);
+    }
+  };
+
+  const handleSold = async () => {
+    if (isGeneratingSoldPacket) return;
+    
+    setIsGeneratingSoldPacket(true);
+    try {
+      const neededSlots = selectSoldForms(currentCustomer);
+      const metadatas = await Promise.all(
+        neededSlots.map(id => {
+          const slot = FORM_SLOTS.find(s => s.id === id);
+          return getFormFileMetadata(slot?.filename ?? 'missing.pdf');
+        })
+      );
+      
+      const missingLabels: string[] = [];
+      metadatas.forEach((m, i) => {
+        if (!m.exists) {
+          const slot = FORM_SLOTS.find(s => s.id === neededSlots[i]);
+          if (slot) missingLabels.push(slot.label);
+        }
+      });
+
+      if (missingLabels.length > 0) {
+        let msg = '';
+        if (missingLabels.length === 1) msg = missingLabels[0];
+        else {
+          const last = missingLabels.pop();
+          msg = missingLabels.join(', ') + ' and ' + last;
+        }
+        showSoldError(`Upload ${msg} in Settings → Forms.`);
+        return;
+      }
+
+      const bytes = await buildSoldPacket(currentCustomer);
+      downloadPdfBytes(bytes, soldPacketFilename(currentCustomer));
+    } catch (err) {
+      console.error('Sold packet generation failed:', err);
+      showSoldError('Could not generate packet. See console for details.');
+    } finally {
+      setIsGeneratingSoldPacket(false);
     }
   };
 
@@ -391,8 +448,10 @@ export default function App() {
               newNote={newNote}
               activeMenu={activeMenu}
               isGeneratingPacket={isGeneratingPacket}
+              isGeneratingSoldPacket={isGeneratingSoldPacket}
               isEstimatingTradeValue={isEstimatingTradeValue}
               testDriveError={testDriveError}
+              soldError={soldError}
               valuationError={valuationError}
               onBack={() => setView('dashboard')}
               onUpdateCustomer={updateCustomerState}
@@ -401,6 +460,7 @@ export default function App() {
               onActiveMenuChange={setActiveMenu}
               onChat={() => setIsChatOpen(true)}
               onTestDrive={handleTestDrive}
+              onSold={handleSold}
               onTradeEstimate={handleTradeEstimate}
             />
           </motion.div>

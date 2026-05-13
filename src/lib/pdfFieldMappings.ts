@@ -71,3 +71,9 @@ export const INTERVIEW_SHEET_FIELDS: PdfFieldMapping[] = [
   { pdfFieldName: 'Current Payments', getValue: c => moneyOrEmpty(c.monthlyPayment) },
   { pdfFieldName: 'What payment range are you looking for', getValue: c => moneyOrEmpty(c.goalsMonthlyPayment) },
 ];
+
+export const DELIVERY_REPORT_FIELDS: PdfFieldMapping[] = [];
+export const DEAL_CHECKLIST_FIELDS: PdfFieldMapping[] = [];
+export const PRIVACY_POLICY_FIELDS: PdfFieldMapping[] = [];
+export const PAYOFF_FIELDS: PdfFieldMapping[] = [];
+export const THREE_LINER_FIELDS: PdfFieldMapping[] = [];

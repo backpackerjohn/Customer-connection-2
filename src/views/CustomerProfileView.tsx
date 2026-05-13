@@ -38,8 +38,10 @@ interface Props {
   newNote: string;
   activeMenu: string | null;
   isGeneratingPacket: boolean;
+  isGeneratingSoldPacket: boolean;
   isEstimatingTradeValue: boolean;
   testDriveError: string | null;
+  soldError: string | null;
   valuationError: string | null;
   onBack: () => void;
   onUpdateCustomer: (updates: Partial<Customer>) => void;
@@ -48,6 +50,7 @@ interface Props {
   onActiveMenuChange: (menu: string | null) => void;
   onChat: () => void;
   onTestDrive: () => void;
+  onSold: () => void;
   onTradeEstimate: (
     input: { 
       vin: string; 
@@ -69,8 +72,10 @@ export function CustomerProfileView({
   newNote,
   activeMenu,
   isGeneratingPacket,
+  isGeneratingSoldPacket,
   isEstimatingTradeValue,
   testDriveError,
+  soldError,
   valuationError,
   onBack,
   onUpdateCustomer,
@@ -79,6 +84,7 @@ export function CustomerProfileView({
   onActiveMenuChange,
   onChat,
   onTestDrive,
+  onSold,
   onTradeEstimate
 }: Props) {
   return (
@@ -202,7 +208,15 @@ export function CustomerProfileView({
                 onClick={isGeneratingPacket ? undefined : onTestDrive}
                 disabled={!currentCustomer.id || isGeneratingPacket}
               />
-              <SubButton icon={<CheckCircle size={20} />} label="Sold" />
+              <SubButton 
+                icon={isGeneratingSoldPacket 
+                  ? <Loader2 size={20} className="animate-spin" /> 
+                  : <CheckCircle size={20} />
+                } 
+                label="Sold" 
+                onClick={isGeneratingSoldPacket ? undefined : onSold}
+                disabled={!currentCustomer.id || isGeneratingSoldPacket}
+              />
             </motion.div>
           )}
           {activeMenu === 'insights' && (
@@ -239,6 +253,16 @@ export function CustomerProfileView({
             className="fixed bottom-28 md:bottom-12 left-1/2 -translate-x-1/2 z-[60] px-6 py-2.5 bg-red-500 text-white text-sm font-bold rounded-full shadow-lg whitespace-nowrap max-w-[90vw]"
           >
             {testDriveError}
+          </motion.div>
+        )}
+        {soldError && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="fixed bottom-40 md:bottom-24 left-1/2 -translate-x-1/2 z-[60] px-6 py-2.5 bg-red-500 text-white text-sm font-bold rounded-full shadow-lg whitespace-nowrap max-w-[90vw]"
+          >
+            {soldError}
           </motion.div>
         )}
       </AnimatePresence>

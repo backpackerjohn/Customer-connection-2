@@ -34,14 +34,15 @@ service cloud.firestore {
     // --- Customer Validation ---
     function isValidCustomer(data) {
       // Identity Integrity
-      return data.createdBy == request.auth.uid
-        && data.status in ['active', 'inactive', 'lead']
-        && data.hasTradeIn is bool
-        && data.stillOwe is bool
+      return (data.get('createdBy', request.auth.uid) == request.auth.uid)
+        && (data.get('status', 'lead') in ['active', 'inactive', 'lead'])
+        && (data.get('hasTradeIn', false) is bool)
+        && (data.get('stillOwe', false) is bool)
+        && (data.get('payingCash', false) is bool)
         
-        // Type & Size Guards
-        && data.firstName is string && data.firstName.size() <= 100
-        && data.lastName is string && data.lastName.size() <= 100
+        // Type & Size Guards - Only check if field is present or use default string to avoid null issues
+        && (data.get('firstName', '') is string && data.get('firstName', '').size() <= 100)
+        && (data.get('lastName', '') is string && data.get('lastName', '').size() <= 100)
         && (data.get('middleInitial', '') is string && data.get('middleInitial', '').size() <= 10)
         && (data.get('phone', '') is string && data.get('phone', '').size() <= 20)
         && (data.get('email', '') is string && data.get('email', '').size() <= 200)
@@ -107,16 +108,16 @@ service cloud.firestore {
         && isValidId(customerId)
         && isValidCustomer(incoming())
         && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time
-        && incoming().keys().hasAll(['firstName', 'lastName', 'status', 'hasTradeIn', 'stillOwe', 'createdBy', 'createdAt', 'updatedAt']);
+        && (incoming().updatedAt == request.time || !('updatedAt' in incoming()))
+        && (incoming().createdBy == request.auth.uid);
         
       allow update: if isSignedIn()
         && isValidId(customerId)
-        && isOwner(existing())
+        && (isOwner(existing()) || existing().createdBy == null) // Handle legacy docs without createdBy
         && isValidCustomer(incoming())
         // Immutable check
-        && incoming().createdAt == existing().createdAt
-        && incoming().createdBy == existing().createdBy
+        && (incoming().get('createdAt', existing().createdAt) == existing().createdAt)
+        && (incoming().get('createdBy', existing().createdBy) == existing().createdBy)
         // Action-Based Pattern
         && (
           incoming().diff(existing()).affectedKeys().hasOnly([
@@ -124,7 +125,7 @@ service cloud.firestore {
             'dlNumber', 'dlState', 'dlExpiration', 'dlImageUrl', 'vehicleStock', 'vehicleYear', 'vehicleMake',
             'vehicleModel', 'vehicleVin', 'vehicleMiles', 'insuranceCompany', 'insuranceImageUrl', 'agentName',
             'hasTradeIn', 'tradeYear', 'tradeMake', 'tradeModel', 'tradeTrim', 'tradeMileage',
-            'tradeVin', 'stillOwe', 'lienholder', 'payoffAmount', 'monthlyPayment',
+            'tradeVin', 'stillOwe', 'payingCash', 'lienholder', 'payoffAmount', 'monthlyPayment',
             'monthsRemaining', 'goalsMonthlyPayment', 'goalsMoneyDown', 'goalsCreditScore',
             'tradeValueLow', 'tradeValueHigh',
             'tradeValueExcellentLow', 'tradeValueExcellentHigh',
@@ -132,10 +133,11 @@ service cloud.firestore {
             'tradeValueGoodLow', 'tradeValueGoodHigh',
             'tradeValueFairLow', 'tradeValueFairHigh',
             'tradeValueSource', 'tradeValueCondition',
-            'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt'
+            'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
+            'createdBy', 'createdAt'
           ])
         )
-        && incoming().updatedAt == request.time;
+        && (incoming().get('updatedAt', request.time) == request.time);
 
       allow delete: if isValidId(customerId) && isOwner(existing());
 

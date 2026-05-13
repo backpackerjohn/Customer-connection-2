@@ -2,6 +2,7 @@ import React from 'react';
 import { Flag } from 'lucide-react';
 import { Customer } from '../../types';
 import { InputField } from '../../components/InputField';
+import { Toggle } from '../../components/Toggle';
 
 interface Props {
   customer: Customer;
@@ -18,6 +19,16 @@ export function GoalsSection({ customer, onChange }: Props) {
         <h2 className="text-xl font-bold">Goals</h2>
       </div>
       <div className="card p-6 space-y-6">
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+          <div>
+            <div className="font-bold">Paying Cash</div>
+            <div className="text-sm text-gray-500">Customer is not financing</div>
+          </div>
+          <Toggle 
+            active={customer.payingCash} 
+            onToggle={() => onChange({ payingCash: !customer.payingCash })} 
+          />
+        </div>
         <InputField 
           label="Monthly Payment Range" 
           placeholder="e.g. $400 - $500"

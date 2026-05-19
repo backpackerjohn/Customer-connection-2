@@ -39,6 +39,7 @@ const validCustomer = (overrides = {}) => ({
   status: 'lead',
   hasTradeIn: false,
   stillOwe: false,
+  payingCash: false,
   createdBy: 'user_alice',
   createdAt: serverTimestamp(),
   updatedAt: serverTimestamp(),

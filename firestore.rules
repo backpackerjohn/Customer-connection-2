@@ -33,9 +33,7 @@ service cloud.firestore {
 
     // --- Customer Validation ---
     function isValidCustomer(data) {
-      // Identity Integrity
-      return (data.get('createdBy', request.auth.uid) == request.auth.uid)
-        && (data.get('status', 'lead') in ['active', 'inactive', 'lead'])
+      return (data.get('status', 'lead') in ['active', 'inactive', 'lead'])
         && (data.get('hasTradeIn', false) is bool)
         && (data.get('stillOwe', false) is bool)
         && (data.get('payingCash', false) is bool)
@@ -124,8 +122,8 @@ service cloud.firestore {
             'firstName', 'middleInitial', 'lastName', 'dob', 'phone', 'email', 'address', 'city', 'state', 'zip',
             'dlNumber', 'dlState', 'dlExpiration', 'dlImageUrl', 'vehicleStock', 'vehicleYear', 'vehicleMake',
             'vehicleModel', 'vehicleVin', 'vehicleMiles', 'insuranceCompany', 'insuranceImageUrl', 'agentName',
-            'hasTradeIn', 'tradeYear', 'tradeMake', 'tradeModel', 'tradeTrim', 'tradeMileage',
-            'tradeVin', 'stillOwe', 'payingCash', 'lienholder', 'payoffAmount', 'monthlyPayment',
+            'hasTradeIn', 'stillOwe', 'payingCash', 'tradeYear', 'tradeMake', 'tradeModel', 'tradeTrim', 'tradeMileage',
+            'tradeVin', 'lienholder', 'payoffAmount', 'monthlyPayment',
             'monthsRemaining', 'goalsMonthlyPayment', 'goalsMoneyDown', 'goalsCreditScore',
             'tradeValueLow', 'tradeValueHigh',
             'tradeValueExcellentLow', 'tradeValueExcellentHigh',

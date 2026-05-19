@@ -61,6 +61,7 @@ export interface Customer {
   status: 'active' | 'inactive' | 'lead';
   createdAt?: FirestoreTimestamp;
   updatedAt?: FirestoreTimestamp;
+  createdBy?: string;
 }
 
 export interface Note {

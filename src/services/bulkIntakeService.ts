@@ -1,0 +1,159 @@
+import { GoogleGenAI, Type } from "@google/genai";
+import { Customer } from "../types";
+import { toISODate } from '../lib/dateNormalizer';
+
+const ai = new GoogleGenAI({ 
+  apiKey: process.env.GEMINI_API_KEY || '',
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
+
+export async function extractBulkCustomers(image: { inlineData: { data: string; mimeType: string } }): Promise<Partial<Customer>[]> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not set");
+  }
+
+  const systemInstruction = `
+    You are an expert OCR and data extraction assistant for a car dealership CRM.
+    Your task is to take a screenshot containing a list of customers/prospects from other CRMs or spreadsheets, extract EVERY customer visible, and format them into structured JSON.
+    
+    EXTRACT THESE FIELDS for each customer:
+    - firstName: First name
+    - middleInitial: Middle initial (if present)
+    - lastName: Last name
+    - dob: Date of birth (format: YYYY-MM-DD, ISO 8601)
+    - phone: Phone number
+    - email: Email address
+    - address: Street address
+    - city: City
+    - state: State code (2-letter)
+    - zip: Zip code
+    - dlNumber: Driver's license number
+    - dlState: License state
+    - dlExpiration: License expiration date (format: YYYY-MM-DD, ISO 8601)
+    - vehicleStock, vehicleYear, vehicleMake, vehicleModel, vehicleVin, vehicleMiles: Vehicle interested in. (If a vehicle is noted as "interested in", it MUST map to these new-vehicle fields, NEVER to trade-in fields).
+    - tradeYear, tradeMake, tradeModel, tradeTrim, tradeMileage, tradeVin: Trade-in details
+    - insuranceCompany, agentName: Insurance details
+    - stillOwe, lienholder, payoffAmount, monthlyPayment, monthsRemaining: Financial details
+    - payingCash: true if the customer indicated they are paying cash for the new vehicle; false otherwise (financing or unspecified)
+    - goalsMonthlyPayment, goalsMoneyDown, goalsCreditScore: Customer goals
+    - customerDesiredTradeValue: Customer's desired trade value
+    - status: Customer status (defaults to "lead" unless another status is explicitly clear, e.g. "active", "inactive", "lead")
+
+    RULES:
+    1. Extract ALL customers visible in the screenshot. Do not stop at the first few.
+    2. DATA FORMATTING (CRITICAL):
+       - Name Fields: Proper Title Case. Middle Initial should be a single character if possible.
+       - Date Fields (dob, dlExpiration): Format as YYYY-MM-DD (ISO 8601). Example: 1985-04-17. Do NOT use MM/DD/YYYY or MM-DD-YYYY in the final field.
+       - Phone: (XXX) XXX-XXXX.
+       - State Fields: 2-letter uppercase code.
+       - VIN & Stock Numbers: ALL UPPERCASE.
+       - Email: lowercase.
+       - Address & City: Proper Title Case.
+    3. If any fields are blank or not present for a customer, omit them or set them appropriately (do not invent information).
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        image,
+        { text: "Extract all customers from this screenshot." }
+      ],
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            customers: {
+              type: Type.ARRAY,
+              description: "The list of extracted customers from the screenshot.",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  firstName: { type: Type.STRING },
+                  middleInitial: { type: Type.STRING },
+                  lastName: { type: Type.STRING },
+                  dob: { type: Type.STRING },
+                  phone: { type: Type.STRING },
+                  email: { type: Type.STRING },
+                  address: { type: Type.STRING },
+                  city: { type: Type.STRING },
+                  state: { type: Type.STRING },
+                  zip: { type: Type.STRING },
+                  dlNumber: { type: Type.STRING },
+                  dlState: { type: Type.STRING },
+                  dlExpiration: { type: Type.STRING },
+                  vehicleStock: { type: Type.STRING },
+                  vehicleYear: { type: Type.STRING },
+                  vehicleMake: { type: Type.STRING },
+                  vehicleModel: { type: Type.STRING },
+                  vehicleVin: { type: Type.STRING },
+                  vehicleMiles: { type: Type.STRING },
+                  insuranceCompany: { type: Type.STRING },
+                  agentName: { type: Type.STRING },
+                  hasTradeIn: { type: Type.BOOLEAN },
+                  tradeYear: { type: Type.STRING },
+                  tradeMake: { type: Type.STRING },
+                  tradeModel: { type: Type.STRING },
+                  tradeTrim: { type: Type.STRING },
+                  tradeMileage: { type: Type.STRING },
+                  tradeVin: { type: Type.STRING },
+                  stillOwe: { type: Type.BOOLEAN },
+                  payingCash: { type: Type.BOOLEAN },
+                  lienholder: { type: Type.STRING },
+                  payoffAmount: { type: Type.STRING },
+                  monthlyPayment: { type: Type.STRING },
+                  monthsRemaining: { type: Type.STRING },
+                  goalsMonthlyPayment: { type: Type.STRING },
+                  goalsMoneyDown: { type: Type.STRING },
+                  goalsCreditScore: { type: Type.STRING },
+                  customerDesiredTradeValue: { type: Type.STRING },
+                  status: { type: Type.STRING, enum: ["active", "inactive", "lead"] }
+                },
+                propertyOrdering: [
+                  "firstName", "middleInitial", "lastName", "dob", "phone", "email",
+                  "address", "city", "state", "zip", "dlNumber", "dlState", "dlExpiration",
+                  "vehicleStock", "vehicleYear", "vehicleMake", "vehicleModel", "vehicleVin", "vehicleMiles",
+                  "insuranceCompany", "agentName", "hasTradeIn", "tradeYear", "tradeMake",
+                  "tradeModel", "tradeTrim", "tradeMileage", "tradeVin", "stillOwe",
+                  "lienholder", "payoffAmount", "monthlyPayment", "monthsRemaining", "payingCash",
+                  "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status"
+                ]
+              }
+            }
+          },
+          required: ["customers"],
+          propertyOrdering: ["customers"]
+        }
+      }
+    });
+
+    const text = response.text || "{}";
+    const parsed = JSON.parse(text);
+    const customersArray = parsed.customers || [];
+
+    // Normalize date fields for any returned row
+    for (const c of customersArray) {
+      if (c.dob) {
+        const iso = toISODate(c.dob);
+        if (iso) c.dob = iso;
+        else delete c.dob;
+      }
+      if (c.dlExpiration) {
+        const iso = toISODate(c.dlExpiration);
+        if (iso) c.dlExpiration = iso;
+        else delete c.dlExpiration;
+      }
+    }
+
+    return customersArray;
+  } catch (error) {
+    console.error("Bulk extraction error:", error);
+    return [];
+  }
+}

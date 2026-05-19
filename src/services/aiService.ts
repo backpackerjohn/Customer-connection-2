@@ -60,12 +60,13 @@ export async function processCustomerChat(
     - goalsMonthlyPayment, goalsMoneyDown, goalsCreditScore: Customer goals
     - customerDesiredTradeValue: Customer's desired trade-in value (what they're asking for the trade).
     - status: Customer status ("active", "inactive", "lead")
+    - purchaseDate: Date the customer bought their vehicle (YYYY-MM-DD)
  
      RULES:
      1. ONLY return the fields you are confident about.
      2. DATA FORMATTING (CRITICAL):
         - Name Fields: Proper Title Case. Middle Initial should be a single character if possible.
-        - Date Fields (dob, dlExpiration): Format as YYYY-MM-DD (ISO 8601). The form uses native HTML date inputs which require this exact format. Example: 1985-04-17. Do NOT use MM/DD/YYYY or any other format.
+        - Date Fields (dob, dlExpiration, purchaseDate): Format as YYYY-MM-DD (ISO 8601). The form uses native HTML date inputs which require this exact format. Example: 1985-04-17. Do NOT use MM/DD/YYYY or any other format.
         - Phone: (XXX) XXX-XXXX.
         - State Fields: 2-letter uppercase code.
        - VIN & Stock Numbers: ALL UPPERCASE.
@@ -139,7 +140,8 @@ export async function processCustomerChat(
                   goalsMoneyDown: { type: Type.STRING },
                   goalsCreditScore: { type: Type.STRING },
                   customerDesiredTradeValue: { type: Type.STRING },
-                  status: { type: Type.STRING, enum: ["active", "inactive", "lead"] }
+                  status: { type: Type.STRING, enum: ["active", "inactive", "lead"] },
+                  purchaseDate: { type: Type.STRING }
                 },
                 propertyOrdering: [
                   "firstName", "middleInitial", "lastName", "dob", "phone", "email",
@@ -148,7 +150,7 @@ export async function processCustomerChat(
                   "insuranceCompany", "agentName", "hasTradeIn", "tradeYear", "tradeMake",
                   "tradeModel", "tradeTrim", "tradeMileage", "tradeVin", "stillOwe",
                   "lienholder", "payoffAmount", "monthlyPayment", "monthsRemaining", "payingCash",
-                  "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status"
+                  "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status", "purchaseDate"
                 ]
               },
               inventoryStockFound: { type: Type.STRING, description: "If a vehicle stock number is found in the text or image, put it here." },
@@ -179,6 +181,11 @@ export async function processCustomerChat(
       const iso = toISODate(parsedResult.updatedFields.dlExpiration);
       if (iso) parsedResult.updatedFields.dlExpiration = iso;
       else delete parsedResult.updatedFields.dlExpiration;
+    }
+    if (parsedResult.updatedFields?.purchaseDate) {
+      const iso = toISODate(parsedResult.updatedFields.purchaseDate);
+      if (iso) parsedResult.updatedFields.purchaseDate = iso;
+      else delete parsedResult.updatedFields.purchaseDate;
     }
 
     return parsedResult as ChatResponse;

@@ -3,13 +3,11 @@ import {
   Users, 
   LayoutDashboard, 
   Settings, 
-  LogOut
+  LogOut,
+  Sparkles,
+  Bell
 } from 'lucide-react';
-import { 
-  onAuthStateChanged, 
-  signOut,
-  User 
-} from 'firebase/auth';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { auth, handleFirestoreError, OperationType } from './lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -22,6 +20,9 @@ import {
   createCustomer, updateCustomer, subscribeToCustomers 
 } from './services/customersService';
 import { createNote, subscribeToNotes } from './services/notesService';
+import { createContact } from './services/contactsService';
+import { ReminderKind, recordContact, computeNextCadenceDue } from './lib/reminders/engine';
+import { REMINDER_CONFIG } from './lib/reminders/config';
 import { 
   buildTestDrivePacket, 
   buildSoldPacket,
@@ -38,11 +39,13 @@ import { LoginView } from './views/LoginView';
 import { DashboardView } from './views/DashboardView';
 import { CustomerProfileView } from './views/CustomerProfileView';
 import { SettingsView } from './views/SettingsView';
+import { BulkIntakeView } from './views/BulkIntakeView';
+import { TodayView } from './views/TodayView';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'dashboard' | 'profile' | 'settings'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'profile' | 'settings' | 'bulk-intake' | 'today'>('dashboard');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [currentCustomer, setCurrentCustomer] = useState<Customer>(emptyCustomer);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -187,6 +190,79 @@ export default function App() {
     setView('profile');
   };
 
+  const handleTexted = async (customerId: string, when: Date, closedKinds: ReminderKind[]) => {
+    if (!user) return;
+    
+    // Find the customer to update
+    const targetCustomer = customers.find(c => c.id === customerId);
+    if (!targetCustomer) return;
+
+    try {
+      // 1. Write the contact record
+      await createContact(customerId, {
+        authorId: user.uid,
+        kinds: closedKinds,
+        note: `Contacted customer via text message (${closedKinds.join(' + ')} outreach).`,
+        at: when
+      });
+
+      // 2. Advance next cadence math
+      const updatedCust = recordContact(targetCustomer, when, closedKinds, REMINDER_CONFIG);
+      const nextDue = computeNextCadenceDue(updatedCust, REMINDER_CONFIG);
+      
+      const patch: Partial<Customer> = {
+        lastContactedAt: updatedCust.lastContactedAt,
+        nextCadenceDue: nextDue,
+        manualReminders: updatedCust.manualReminders || []
+      };
+
+      if (closedKinds.includes('referral48to72h')) {
+        patch.referralAskedAt = when.toISOString();
+      }
+
+      // 3. Update Firestore & local state
+      await updateCustomer(customerId, { ...targetCustomer, ...patch });
+      
+      if (currentCustomer.id === customerId) {
+        setCurrentCustomer(prev => ({ ...prev, ...patch }));
+      }
+    } catch (error) {
+      console.error('Failed to log texted and advance cadence:', error);
+      handleFirestoreError(error, OperationType.WRITE, `customers/${customerId}/contacts`);
+    }
+  };
+
+  const handleReschedule = async (customerId: string, dateStr: string, reason: string) => {
+    if (!user) return;
+
+    const targetCustomer = customers.find(c => c.id === customerId);
+    if (!targetCustomer) return;
+
+    try {
+      const activeReminders = targetCustomer.manualReminders || [];
+      const updatedReminders = [...activeReminders, { date: dateStr, reason }];
+      
+      const nextDue = computeNextCadenceDue({
+        ...targetCustomer,
+        manualReminders: updatedReminders
+      }, REMINDER_CONFIG);
+
+      const patch = {
+        manualReminders: updatedReminders,
+        nextCadenceDue: nextDue
+      };
+
+      await updateCustomer(customerId, { ...targetCustomer, ...patch });
+
+      if (currentCustomer.id === customerId) {
+        setCurrentCustomer(prev => ({ ...prev, ...patch }));
+      }
+    } catch (error) {
+      console.error('Failed to reschedule:', error);
+      handleFirestoreError(error, OperationType.WRITE, `customers/${customerId}`);
+    }
+  };
+
   const updateCustomerState = (updates: Partial<Customer>) => {
     setCurrentCustomer(prev => ({ ...prev, ...updates }));
     setIsDirty(true);
@@ -283,6 +359,17 @@ export default function App() {
 
       const bytes = await buildSoldPacket(currentCustomer);
       downloadPdfBytes(bytes, soldPacketFilename(currentCustomer));
+
+      if (!currentCustomer.purchaseDate) {
+        try {
+          const todayISO = new Date().toISOString();
+          const patch: Partial<Customer> = { purchaseDate: todayISO };
+          await updateCustomer(currentCustomer.id!, { ...currentCustomer, ...patch });
+          setCurrentCustomer(prev => ({ ...prev, ...patch }));
+        } catch (stampErr) {
+          console.error('Failed to stamp purchase date after sale:', stampErr);
+        }
+      }
     } catch (err) {
       console.error('Sold packet generation failed:', err);
       showSoldError('Could not generate packet. See console for details.');
@@ -399,7 +486,19 @@ export default function App() {
             active={view === 'dashboard'} 
             onClick={() => setView('dashboard')}
           />
+          <NavItem 
+            icon={<Bell size={20} />} 
+            label="Today" 
+            active={view === 'today'} 
+            onClick={() => setView('today')}
+          />
           <NavItem icon={<Users size={20} />} label="Customers" />
+          <NavItem 
+            icon={<Sparkles size={20} />} 
+            label="Bulk Intake" 
+            active={view === 'bulk-intake'}
+            onClick={() => setView('bulk-intake')}
+          />
           <NavItem 
             icon={<Settings size={20} />} 
             label="Settings" 
@@ -430,6 +529,20 @@ export default function App() {
               customers={customers}
               onNewCustomer={handleNewCustomer}
               onEditCustomer={handleEditCustomer}
+            />
+          </motion.div>
+        )}
+        {view === 'today' && (
+          <motion.div
+            key="today"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <TodayView 
+              customers={customers}
+              onTexted={handleTexted}
+              onReschedule={handleReschedule}
             />
           </motion.div>
         )}
@@ -475,6 +588,20 @@ export default function App() {
             <SettingsView onBack={() => setView('dashboard')} />
           </motion.div>
         )}
+        {view === 'bulk-intake' && (
+          <motion.div
+            key="bulk-intake"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+          >
+            <BulkIntakeView 
+              customers={customers}
+              user={user}
+              onComplete={() => setView('dashboard')}
+            />
+          </motion.div>
+        )}
       </AnimatePresence>
 
       <AIChatOverlay 
@@ -485,14 +612,23 @@ export default function App() {
       />
 
       {/* Mobile Nav Bar - Only visible on Dashboard or if we want global nav */}
-      {(view === 'dashboard' || view === 'settings') && (
+      {(view === 'dashboard' || view === 'settings' || view === 'bulk-intake' || view === 'today') && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-8 py-4 flex items-center justify-between z-40">
           <NavIconButton 
             icon={<LayoutDashboard size={24} />} 
             active={view === 'dashboard'} 
             onClick={() => setView('dashboard')}
           />
-          <NavIconButton icon={<Users size={24} />} onClick={() => setView('dashboard')} />
+          <NavIconButton 
+            icon={<Bell size={24} />} 
+            active={view === 'today'} 
+            onClick={() => setView('today')}
+          />
+          <NavIconButton 
+            icon={<Sparkles size={24} />} 
+            active={view === 'bulk-intake'}
+            onClick={() => setView('bulk-intake')}
+          />
           <NavIconButton 
             icon={<Settings size={24} />} 
             active={view === 'settings'}

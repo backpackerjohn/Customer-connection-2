@@ -43,6 +43,11 @@ const validCustomer = (overrides = {}) => ({
   createdBy: 'user_alice',
   createdAt: serverTimestamp(),
   updatedAt: serverTimestamp(),
+  lastContactedAt: '',
+  nextCadenceDue: '',
+  manualReminders: [],
+  purchaseDate: '',
+  referralAskedAt: '',
   ...overrides,
 });
 
@@ -199,6 +204,116 @@ describe('Firestore rules — Customer collection', () => {
       setDoc(doc(aliceDb, 'customers/trade3'), validCustomer({
         tradeValueSource: longSource
       }))
+    );
+  });
+
+  it('16. Reminders Fields — owner can write valid reminders fields', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'customers/rem1'), validCustomer({
+        lastContactedAt: '2026-05-19T20:59:34Z',
+        nextCadenceDue: '2026-06-19',
+        manualReminders: [
+          { date: '2026-05-25', reason: 'Follow up' }
+        ]
+      }))
+    );
+  });
+
+  it('17. Reminders Rules — oversized lastContactedAt rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/rem2'), validCustomer({
+        lastContactedAt: 'a'.repeat(31)
+      }))
+    );
+  });
+
+  it('18. Reminders Rules — non-list manualReminders rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/rem3'), validCustomer({
+        manualReminders: 'not-a-list'
+      }))
+    );
+  });
+
+  it('19. Reminders Rules — list of 51+ manualReminders rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    const oversizedList = Array(51).fill({ date: '2026-05-20', reason: 'test' });
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/rem4'), validCustomer({
+        manualReminders: oversizedList
+      }))
+    );
+  });
+
+  it('20. Contacts subcollection — owner can create, others are rejected', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'customers/c1'), 
+        validCustomer({ createdBy: 'user_alice' }));
+    });
+
+    const aliceDb = aliceContext().firestore();
+    const bobDb = bobContext().firestore();
+
+    // Owner (Alice) can create a contact
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'customers/c1/contacts/con1'), {
+        authorId: 'user_alice',
+        kinds: ['cadence'],
+        note: 'Texted client',
+        at: serverTimestamp()
+      })
+    );
+
+    // Non-owner (Bob) is rejected when trying to create a contact
+    await assertFails(
+      setDoc(doc(bobDb, 'customers/c1/contacts/con2'), {
+        authorId: 'user_bob',
+        kinds: ['cadence'],
+        note: 'Texted client',
+        at: serverTimestamp()
+      })
+    );
+
+    // Wrong authorId (not self) is rejected even for Owner
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/c1/contacts/con3'), {
+        authorId: 'user_bob', // Alice tries to forge authorId
+        kinds: ['cadence'],
+        note: 'Texted',
+        at: serverTimestamp()
+      })
+    );
+
+    // Oversized note is rejected
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/c1/contacts/con4'), {
+        authorId: 'user_alice',
+        kinds: ['cadence'],
+        note: 'a'.repeat(1001),
+        at: serverTimestamp()
+      })
+    );
+  });
+
+  it('21. New Fields — oversized purchaseDate (> 30 chars) rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/v2_1'), validCustomer({
+        purchaseDate: '2026-05-19T21:33:13Z_extra_characters_to_exceed_thirty_characters'
+      }))
+    );
+  });
+
+  it('22. New Fields — unknown field is still rejected on create', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/v2_2'), {
+        ...validCustomer(),
+        unsupportedField99: 'unsupported'
+      })
     );
   });
 });

@@ -88,13 +88,26 @@ service cloud.firestore {
         && (data.get('tradeValueSource', '') is string && data.get('tradeValueSource', '').size() <= 100)
         && (data.get('tradeValueCondition', '') is string && data.get('tradeValueCondition', '').size() <= 20)
         && (data.get('tradeValueAt', '') is string && data.get('tradeValueAt', '').size() <= 30)
-        && (data.get('customerDesiredTradeValue', '') is string && data.get('customerDesiredTradeValue', '').size() <= 20);
+        && (data.get('customerDesiredTradeValue', '') is string && data.get('customerDesiredTradeValue', '').size() <= 20)
+        && (data.get('lastContactedAt', '') is string && data.get('lastContactedAt', '').size() <= 30)
+        && (data.get('nextCadenceDue', '') is string && data.get('nextCadenceDue', '').size() <= 30)
+        && (data.get('manualReminders', []) is list && data.get('manualReminders', []).size() <= 50)
+        && (data.get('purchaseDate', '') is string && data.get('purchaseDate', '').size() <= 30)
+        && (data.get('referralAskedAt', '') is string && data.get('referralAskedAt', '').size() <= 30);
     }
 
     function isValidNote(data) {
       return data.content is string && data.content.size() <= 5000
         && data.type in ['manual', 'ai', 'transcript']
         && data.authorId == request.auth.uid;
+    }
+
+    function isValidContact(data) {
+      return data.authorId == request.auth.uid
+        && data.kinds is list
+        && data.kinds.size() <= 10
+        && data.get('note', '') is string
+        && data.get('note', '').size() <= 1000;
     }
 
     // --- Collection Routes ---
@@ -132,7 +145,7 @@ service cloud.firestore {
             'tradeValueFairLow', 'tradeValueFairHigh',
             'tradeValueSource', 'tradeValueCondition',
             'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
-            'createdBy', 'createdAt'
+            'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt'
           ])
         )
         && (incoming().get('updatedAt', request.time) == request.time);
@@ -148,6 +161,17 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/customers/$(customerId)).data.createdBy == request.auth.uid
           && incoming().createdAt == request.time;
         allow update, delete: if isValidId(noteId) && isNoteAuthor(existing());
+      }
+
+      // Contacts Subcollection
+      match /contacts/{contactId} {
+        allow list: if isSignedIn() && resource.data.authorId == request.auth.uid;
+        allow get: if isValidId(contactId) && isSignedIn() && resource.data.authorId == request.auth.uid;
+        allow create: if isValidId(contactId)
+          && isValidContact(incoming())
+          && get(/databases/$(database)/documents/customers/$(customerId)).data.createdBy == request.auth.uid
+          && incoming().at == request.time;
+        allow update, delete: if isValidId(contactId) && isSignedIn() && existing().authorId == request.auth.uid;
       }
     }
   }

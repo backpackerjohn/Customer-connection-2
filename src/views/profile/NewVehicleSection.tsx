@@ -54,6 +54,14 @@ export function NewVehicleSection({ customer, onChange }: Props) {
             onChange={v => onChange({ vehicleMiles: v })} 
           />
         </div>
+        <div className="grid grid-cols-2 gap-4">
+          <InputField 
+            label="Purchase Date" 
+            type="date"
+            value={customer.purchaseDate ? customer.purchaseDate.split('T')[0] : ''} 
+            onChange={v => onChange({ purchaseDate: v })} 
+          />
+        </div>
       </div>
     </section>
   );

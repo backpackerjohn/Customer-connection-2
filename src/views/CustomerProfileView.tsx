@@ -127,6 +127,7 @@ export function CustomerProfileView({
           newNote={newNote}
           onNewNoteChange={onNewNoteChange}
           onAddNote={onAddNote}
+          onChange={onUpdateCustomer}
         />
       </div>
 

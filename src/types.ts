@@ -59,6 +59,11 @@ export interface Customer {
   goalsMoneyDown?: string;
   goalsCreditScore?: string;
   status: 'active' | 'inactive' | 'lead';
+  lastContactedAt?: string;
+  nextCadenceDue?: string;
+  manualReminders?: { date: string; reason: string }[];
+  purchaseDate?: string;         // ISO date, set by Sold button
+  referralAskedAt?: string;      // ISO date, set when the referral reminder is checked off
   createdAt?: FirestoreTimestamp;
   updatedAt?: FirestoreTimestamp;
   createdBy?: string;

@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { TEST_DRIVE_AGREEMENT_FIELDS, INTERVIEW_SHEET_FIELDS } from './pdfFieldMappings';
+import {
+  TEST_DRIVE_AGREEMENT_FIELDS,
+  INTERVIEW_SHEET_FIELDS,
+  DELIVERY_REPORT_FIELDS,
+  DEAL_CHECKLIST_FIELDS,
+  PRIVACY_POLICY_FIELDS,
+  PAYOFF_FIELDS,
+  THREE_LINER_FIELDS,
+} from './pdfFieldMappings';
 import { Customer } from '../types';
 
 const sample: Customer = {
@@ -64,5 +72,84 @@ describe('INTERVIEW_SHEET_FIELDS', () => {
     expect(INTERVIEW_SHEET_FIELDS.find(
       x => x.pdfFieldName === 'Do you owe a balance on your vehicle'
     )).toBeUndefined();
+  });
+});
+
+describe('DELIVERY_REPORT_FIELDS', () => {
+  it('has 11 mappings', () => {
+    expect(DELIVERY_REPORT_FIELDS).toHaveLength(11);
+  });
+  it('FirstName LastName concatenates first + middle initial + last', () => {
+    const m = DELIVERY_REPORT_FIELDS.find(x => x.pdfFieldName === 'FirstName LastName')!;
+    expect(m.getValue(sample)).toBe('Sarah M. Adams');
+  });
+  it('VIN uppercased', () => {
+    const m = DELIVERY_REPORT_FIELDS.find(x => x.pdfFieldName === 'VIN')!;
+    expect(m.getValue(sample)).toBe('KMHLW4DK9TU041041');
+  });
+  it('Deal_Date is today MM/DD/YYYY when purchaseDate is unset', () => {
+    const m = DELIVERY_REPORT_FIELDS.find(x => x.pdfFieldName === 'Deal_Date')!;
+    expect(m.getValue(sample)).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
+  });
+  it('Deal_Date uses purchaseDate when set (full ISO timestamp)', () => {
+    const m = DELIVERY_REPORT_FIELDS.find(x => x.pdfFieldName === 'Deal_Date')!;
+    expect(m.getValue({ ...sample, purchaseDate: '2026-03-15T14:22:09.000Z' })).toBe('03/15/2026');
+  });
+});
+
+describe('DEAL_CHECKLIST_FIELDS', () => {
+  it('has 5 mappings', () => {
+    expect(DEAL_CHECKLIST_FIELDS).toHaveLength(5);
+  });
+  it('NEW Vehicle_VIN uppercased', () => {
+    const m = DEAL_CHECKLIST_FIELDS.find(x => x.pdfFieldName === 'NEW Vehicle_VIN')!;
+    expect(m.getValue(sample)).toBe('KMHLW4DK9TU041041');
+  });
+});
+
+describe('PRIVACY_POLICY_FIELDS', () => {
+  it('is intentionally empty (template not supplied / static legal text)', () => {
+    expect(PRIVACY_POLICY_FIELDS).toEqual([]);
+  });
+});
+
+describe('PAYOFF_FIELDS', () => {
+  it('has 8 mappings (lender/bank info skipped — filled at closing)', () => {
+    expect(PAYOFF_FIELDS).toHaveLength(8);
+  });
+  it('Lender_Name comes from customer.lienholder', () => {
+    const m = PAYOFF_FIELDS.find(x => x.pdfFieldName === 'Lender_Name')!;
+    expect(m.getValue({ ...sample, lienholder: 'Honda Financial' })).toBe('Honda Financial');
+  });
+  it('TODAYS PAYOFF formats as currency', () => {
+    const m = PAYOFF_FIELDS.find(x => x.pdfFieldName === 'TODAYS PAYOFF')!;
+    expect(m.getValue({ ...sample, payoffAmount: '18750' })).toBe('$18,750');
+  });
+  it('Trade-In Vehicle Year/Make/Model map to trade* fields', () => {
+    const yr = PAYOFF_FIELDS.find(x => x.pdfFieldName === 'Trade-In Vehicle Year')!;
+    const mk = PAYOFF_FIELDS.find(x => x.pdfFieldName === 'Trade-In Vehicle Make')!;
+    const md = PAYOFF_FIELDS.find(x => x.pdfFieldName === 'Trade-In Vehicle Model')!;
+    const withTrade = { ...sample, tradeYear: '2018', tradeMake: 'Honda', tradeModel: 'Civic' };
+    expect(yr.getValue(withTrade)).toBe('2018');
+    expect(mk.getValue(withTrade)).toBe('Honda');
+    expect(md.getValue(withTrade)).toBe('Civic');
+  });
+});
+
+describe('THREE_LINER_FIELDS', () => {
+  it('has 9 mappings (Text* and c2_* skipped)', () => {
+    expect(THREE_LINER_FIELDS).toHaveLength(9);
+  });
+  it('c_state uppercased', () => {
+    const m = THREE_LINER_FIELDS.find(x => x.pdfFieldName === 'c_state')!;
+    expect(m.getValue(sample)).toBe('OH');
+  });
+  it('c_birthday formats DOB ISO → MM/DD/YYYY', () => {
+    const m = THREE_LINER_FIELDS.find(x => x.pdfFieldName === 'c_birthday')!;
+    expect(m.getValue({ ...sample, dob: '1985-07-04' })).toBe('07/04/1985');
+  });
+  it('_today_ uses dealDate (today when purchaseDate unset)', () => {
+    const m = THREE_LINER_FIELDS.find(x => x.pdfFieldName === '_today_')!;
+    expect(m.getValue(sample)).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
   });
 });

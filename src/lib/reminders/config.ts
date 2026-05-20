@@ -60,6 +60,9 @@ export const REMINDER_CONFIG = {
     cadenceMonths: { min: 3, max: 6 },
     combineWindowDays: 7,
   },
+  calendarReminders: {
+    gracePeriodDays: 7
+  },
   holidays: (year: number): Array<{ dateISO: string; name: string }> => {
     return [
       { dateISO: formatYMD(year, 1, 1), name: "New Year's Day" },

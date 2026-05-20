@@ -62,38 +62,24 @@ export function getDueReminders(customer: Customer, today: Date, config: Reminde
 
   const hasPurchaseDate = 'purchaseDate' in customer && typeof customer.purchaseDate === 'string' && customer.purchaseDate.length > 0;
 
-  // Look up holidays for today.getFullYear() and today.getFullYear() + 1
-  const currentYearHolidays = config.holidays(today.getFullYear());
-  const nextYearHolidays = config.holidays(today.getFullYear() + 1);
-  const allHolidays = [...currentYearHolidays, ...nextYearHolidays];
-  const combineWindowForHolidays = hasPurchaseDate ? config.buyer.combineWindowDays : config.lead.combineWindowDays;
-
-  for (const h of allHolidays) {
-    if (h.dateISO >= todayStr && getDaysDiff(todayStr, h.dateISO) <= combineWindowForHolidays) {
-      individualReminders.push({
-        dueDate: h.dateISO,
-        reason: 'holiday',
-        label: h.name
-      });
-    }
-  }
-
   if (hasPurchaseDate) {
     const purchaseDate = parseDateString(customer.purchaseDate!);
     const daysSincePurchase = Math.floor((today.getTime() - purchaseDate.getTime()) / 86400000);
-    const mode = daysSincePurchase < config.freshBuyer.windowDays ? 'freshBuyer' : 'buyer';
+    const isFreshBuyer = daysSincePurchase < config.freshBuyer.windowDays;
 
-    if (mode === 'freshBuyer') {
-      // 1. followUp24h: dueDate = purchaseDate + followUpHours; one-shot; fires until closed
+    if (isFreshBuyer) {
+      // --- FRESH BUYER MODE ---
+      // 1. followUp24h (FIX 6 with timestamp comparison)
+      const purchaseTime = purchaseDate.getTime();
+      const lastContactTime = customer.lastContactedAt ? new Date(customer.lastContactedAt).getTime() : 0;
+      const isFollowUpClosed = lastContactTime > purchaseTime;
+
       const followUpDueDateStr = formatDateISO(new Date(purchaseDate.getTime() + config.freshBuyer.followUpHours * 3600000));
-      const lastContactStr = customer.lastContactedAt ? formatDateISO(new Date(customer.lastContactedAt)) : '';
-      const isFollowUpClosed = lastContactStr && lastContactStr >= followUpDueDateStr;
-      
       if (!isFollowUpClosed) {
         individualReminders.push({ dueDate: followUpDueDateStr, reason: 'followUp24h' });
       }
 
-      // 2. referral48to72h: due if hoursSincePurchase >= min hours and referralAskedAt is not set
+      // 2. referral48to72h
       const hoursSincePurchase = (today.getTime() - purchaseDate.getTime()) / 3600000;
       if (hoursSincePurchase >= config.freshBuyer.referralWindowHours.min && !customer.referralAskedAt) {
         const refDueDateStr = formatDateISO(new Date(purchaseDate.getTime() + config.freshBuyer.referralWindowHours.min * 3600000));
@@ -114,9 +100,9 @@ export function getDueReminders(customer: Customer, today: Date, config: Reminde
         for (const rem of customer.manualReminders) {
           if (rem.date && rem.date <= todayStr) {
             individualReminders.push({ 
-              dueDate: rem.date, 
-              reason: 'manual', 
-              label: rem.reason 
+               dueDate: rem.date, 
+               reason: 'manual', 
+               label: rem.reason 
             });
           }
         }
@@ -135,81 +121,106 @@ export function getDueReminders(customer: Customer, today: Date, config: Reminde
         labels: item.label ? [item.label] : [],
         isOverdue: item.dueDate < todayStr
       }));
-    } else {
-      // mode === 'buyer'
-      // 1. Cadence
-      const nextCadence = customer.nextCadenceDue;
-      if (!nextCadence) {
-        const startStr = customer.lastContactedAt ? formatDateISO(new Date(customer.lastContactedAt)) : customer.purchaseDate!;
-        const defaultCadence = rollNextCadence(parseDateString(startStr), 'buyer', config);
-        if (defaultCadence <= todayStr) {
-          individualReminders.push({ dueDate: defaultCadence, reason: 'cadence' });
-        }
-      } else if (nextCadence <= todayStr) {
-        individualReminders.push({ dueDate: nextCadence, reason: 'cadence' });
-      }
+    }
+  }
 
-      // 2. Anniversary: yearly MM-DD equal, yearsSincePurchase >= 1
-      const todayMMDD = todayStr.substring(5, 10);
-      const purchaseMMDD = customer.purchaseDate!.substring(5, 10);
-      const purchaseYear = parseDateString(customer.purchaseDate!).getFullYear();
-      const todayYear = today.getFullYear();
-      if (todayMMDD === purchaseMMDD && todayYear > purchaseYear) {
-        individualReminders.push({ dueDate: todayStr, reason: 'anniversary' });
-      }
+  // --- NON-FRESH-BUYER MODE (either Lead or standard Buyer) ---
 
-      // 3. Birthday
-      if (customer.dob) {
-        const todayMMDD = todayStr.substring(5, 10);
-        const dobMMDD = customer.dob.substring(5, 10);
-        if (todayMMDD === dobMMDD) {
-          individualReminders.push({ dueDate: todayStr, reason: 'birthday', label: 'Birthday' });
-        }
+  // 1. Cadence
+  if (hasPurchaseDate) {
+    const nextCadence = customer.nextCadenceDue;
+    if (!nextCadence) {
+      const startStr = customer.lastContactedAt ? formatDateISO(new Date(customer.lastContactedAt)) : customer.purchaseDate!;
+      const defaultCadence = rollNextCadence(parseDateString(startStr), 'buyer', config);
+      if (defaultCadence <= todayStr) {
+        individualReminders.push({ dueDate: defaultCadence, reason: 'cadence' });
       }
-
-      // 4. Manual
-      if (customer.manualReminders && Array.isArray(customer.manualReminders)) {
-        for (const rem of customer.manualReminders) {
-          if (rem.date && rem.date <= todayStr) {
-            individualReminders.push({ 
-              dueDate: rem.date, 
-              reason: 'manual', 
-              label: rem.reason 
-            });
-          }
-        }
-      }
+    } else if (nextCadence <= todayStr) {
+      individualReminders.push({ dueDate: nextCadence, reason: 'cadence' });
     }
   } else {
-    // Lead behavior (unchanged)
-    // 1. Cadence
+    // Lead behavior
     const nextCadence = customer.nextCadenceDue;
     if (!nextCadence) {
       individualReminders.push({ dueDate: todayStr, reason: 'cadence' });
     } else if (nextCadence <= todayStr) {
       individualReminders.push({ dueDate: nextCadence, reason: 'cadence' });
     }
+  }
 
-    // 2. Birthday
-    if (customer.dob) {
-      const todayMMDD = todayStr.substring(5, 10);
-      const dobMMDD = customer.dob.substring(5, 10);
-      if (todayMMDD === dobMMDD) {
-        individualReminders.push({ dueDate: todayStr, reason: 'birthday', label: 'Birthday' });
+  // 2. Manual Reminders
+  if (customer.manualReminders && Array.isArray(customer.manualReminders)) {
+    for (const rem of customer.manualReminders) {
+      if (rem.date && rem.date <= todayStr) {
+        individualReminders.push({ 
+          dueDate: rem.date, 
+          reason: 'manual', 
+          label: rem.reason 
+        });
       }
     }
+  }
 
-    // 3. Manual
-    if (customer.manualReminders && Array.isArray(customer.manualReminders)) {
-      for (const rem of customer.manualReminders) {
-        if (rem.date && rem.date <= todayStr) {
-          individualReminders.push({ 
-            dueDate: rem.date, 
-            reason: 'manual', 
-            label: rem.reason 
-          });
+  // 3. Calendar Reminders with candidate window (Grace Period + Combine Window)
+  const years = [today.getFullYear() - 1, today.getFullYear(), today.getFullYear() + 1];
+  const gracePeriodDays = config.calendarReminders?.gracePeriodDays ?? 7;
+  const combineWindow = hasPurchaseDate ? config.buyer.combineWindowDays : config.lead.combineWindowDays;
+
+  const minDate = new Date(today);
+  minDate.setDate(today.getDate() - gracePeriodDays);
+  const minDateStr = formatDateISO(minDate);
+
+  const maxDate = new Date(today);
+  maxDate.setDate(today.getDate() + combineWindow);
+  const maxDateStr = formatDateISO(maxDate);
+
+  const lastContactedPart = customer.lastContactedAt ? formatDateISO(new Date(customer.lastContactedAt)) : '';
+
+  function addCandidate(dateISO: string, reason: ReminderKind, label?: string) {
+    if (dateISO < minDateStr || dateISO > maxDateStr) {
+      return;
+    }
+    const handled = !!lastContactedPart && lastContactedPart >= dateISO;
+    if (!handled) {
+      individualReminders.push({
+        dueDate: dateISO,
+        reason,
+        label
+      });
+    }
+  }
+
+  // Birthday Candidates
+  if (customer.dob) {
+    const dobMMDD = customer.dob.substring(5, 10);
+    for (const year of years) {
+      addCandidate(`${year}-${dobMMDD}`, 'birthday', 'Birthday');
+    }
+  }
+
+  // Anniversary Candidates
+  if (hasPurchaseDate && customer.purchaseDate) {
+    const purchaseMMDD = customer.purchaseDate.substring(5, 10);
+    const purchaseDateObj = parseDateString(customer.purchaseDate);
+    const firstAnniversaryDate = new Date(purchaseDateObj);
+    firstAnniversaryDate.setFullYear(purchaseDateObj.getFullYear() + 1);
+    const firstAnniversaryStr = formatDateISO(firstAnniversaryDate);
+
+    if (today >= firstAnniversaryDate) {
+      for (const year of years) {
+        const dateISO = `${year}-${purchaseMMDD}`;
+        if (dateISO >= firstAnniversaryStr) {
+          addCandidate(dateISO, 'anniversary');
         }
       }
+    }
+  }
+
+  // Holiday Candidates
+  for (const year of years) {
+    const holidaysForYear = config.holidays(year);
+    for (const h of holidaysForYear) {
+      addCandidate(h.dateISO, 'holiday', h.name);
     }
   }
 
@@ -218,14 +229,13 @@ export function getDueReminders(customer: Customer, today: Date, config: Reminde
   // Sort ascending by target date
   individualReminders.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
-  const combineWindow = hasPurchaseDate ? config.buyer.combineWindowDays : config.lead.combineWindowDays;
+  // Combine adjacent/nearby reminders
   const groups: typeof individualReminders[] = [];
-
   for (const rem of individualReminders) {
     let merged = false;
     for (const group of groups) {
-      const minDate = group[0].dueDate;
-      if (getDaysDiff(minDate, rem.dueDate) <= combineWindow) {
+      const minDateInGroup = group[0].dueDate;
+      if (getDaysDiff(minDateInGroup, rem.dueDate) <= combineWindow) {
         group.push(rem);
         merged = true;
         break;
@@ -276,10 +286,8 @@ export function recordContact(
 
   updated.lastContactedAt = when.toISOString();
 
-  if (closedKinds.includes('cadence')) {
-    const mode = 'purchaseDate' in customer && customer.purchaseDate ? 'buyer' : 'lead';
-    updated.nextCadenceDue = rollNextCadence(when, mode, config);
-  }
+  const mode = 'purchaseDate' in customer && customer.purchaseDate ? 'buyer' : 'lead';
+  updated.nextCadenceDue = rollNextCadence(when, mode, config);
 
   if (closedKinds.includes('manual') && updated.manualReminders) {
     updated.manualReminders = updated.manualReminders.filter(rem => rem.date > whenStr);

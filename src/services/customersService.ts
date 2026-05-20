@@ -4,6 +4,8 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Customer } from '../types';
+import { rollNextCadence } from '../lib/reminders/engine';
+import { REMINDER_CONFIG } from '../lib/reminders/config';
 
 /**
  * Creates a new customer document in Firestore.
@@ -17,9 +19,12 @@ export async function createCustomer(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { id, ...customerData } = customer;
   
+  const initialCadenceDue = customer.nextCadenceDue || rollNextCadence(new Date(), 'lead', REMINDER_CONFIG);
+
   // Create a clean object for Firestore (optional: could filter undefined)
   const docRef = await addDoc(collection(db, 'customers'), {
     ...customerData,
+    nextCadenceDue: initialCadenceDue,
     createdBy: uid,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()

@@ -203,7 +203,7 @@ export default function App() {
         authorId: user.uid,
         kinds: closedKinds,
         note: `Contacted customer via text message (${closedKinds.join(' + ')} outreach).`,
-        at: when
+        attestedAt: when.toISOString()
       });
 
       // 2. Advance next cadence math

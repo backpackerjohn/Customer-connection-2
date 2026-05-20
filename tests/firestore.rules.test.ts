@@ -316,4 +316,40 @@ describe('Firestore rules — Customer collection', () => {
       })
     );
   });
+
+  it('23. Owner can create a contact with a valid attestedAt string', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'customers/c1'), 
+        validCustomer({ createdBy: 'user_alice' }));
+    });
+
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'customers/c1/contacts/con23'), {
+        authorId: 'user_alice',
+        kinds: ['cadence'],
+        note: 'Texted client',
+        at: serverTimestamp(),
+        attestedAt: '2026-05-20T00:30:19Z'
+      })
+    );
+  });
+
+  it('24. Contact with attestedAt > 30 chars is rejected', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'customers/c1'), 
+        validCustomer({ createdBy: 'user_alice' }));
+    });
+
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/c1/contacts/con24'), {
+        authorId: 'user_alice',
+        kinds: ['cadence'],
+        note: 'Texted client',
+        at: serverTimestamp(),
+        attestedAt: '2026-05-20T00:30:19Z_extra_characters_to_exceed_thirty_characters'
+      })
+    );
+  });
 });

@@ -12,6 +12,7 @@ export interface Contact {
   kinds: ReminderKind[];
   note?: string;
   authorId: string;
+  attestedAt?: string;  // ISO date — dealer's claimed text date, for backfill
 }
 
 /**
@@ -19,13 +20,14 @@ export interface Contact {
  */
 export async function createContact(
   customerId: string,
-  contact: Omit<Contact, 'id' | 'at'> & { at?: Date }
+  contact: Omit<Contact, 'id' | 'at'>
 ): Promise<string> {
   const path = `customers/${customerId}/contacts`;
   try {
+    const { ...cleanContact } = contact;
     const docRef = await addDoc(collection(db, 'customers', customerId, 'contacts'), {
-      ...contact,
-      at: contact.at || serverTimestamp()
+      ...cleanContact,
+      at: serverTimestamp()
     });
     return docRef.id;
   } catch (error) {

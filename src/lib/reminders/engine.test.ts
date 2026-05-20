@@ -256,4 +256,115 @@ describe('Reminders Engine', () => {
     expect(christmasEveFound).toBe(false);
     expect(christmasDayFound).toBe(false);
   });
+
+  // --- NEW BUGFIX TESTS (FIX 5 & FIX 6) ---
+
+  it("Birthday yesterday, dealer not texted → reminder appears today with isOverdue=true and dueDate=yesterday's date", () => {
+    const today = new Date('2026-05-20T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      dob: '1985-05-19', // birthday was yesterday
+      nextCadenceDue: '2026-06-25' // not due
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    const bdayRem = reminders.find(r => r.reasons.includes('birthday'));
+    expect(bdayRem).toBeDefined();
+    expect(bdayRem?.dueDate).toBe('2026-05-19');
+    expect(bdayRem?.isOverdue).toBe(true);
+  });
+
+  it("Birthday yesterday, dealer texted yesterday → no birthday reminder (handled)", () => {
+    const today = new Date('2026-05-20T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      dob: '1985-05-19', // birthday was yesterday
+      lastContactedAt: '2026-05-19T15:00:00Z', // texted yesterday
+      nextCadenceDue: '2026-06-25'
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    const bdayRem = reminders.find(r => r.reasons.includes('birthday'));
+    expect(bdayRem).toBeUndefined();
+  });
+
+  it("Birthday 8 days ago (past grace) → no birthday reminder", () => {
+    const today = new Date('2026-05-20T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      dob: '1985-05-12', // birthday was 8 days ago
+      nextCadenceDue: '2026-06-25'
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    const bdayRem = reminders.find(r => r.reasons.includes('birthday'));
+    expect(bdayRem).toBeUndefined();
+  });
+
+  it("Holiday 3 days ago, dealer not texted → reminder appears with isOverdue=true", () => {
+    // Let's pick Valentine's Day (02-14) in 2026, and today is Feb 17 (3 days later)
+    const today = new Date('2026-02-17T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      nextCadenceDue: '2026-06-25'
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    const holidayRem = reminders.find(r => r.reasons.includes('holiday') && r.labels.includes("Valentine's Day"));
+    expect(holidayRem).toBeDefined();
+    expect(holidayRem?.dueDate).toBe('2026-02-14');
+    expect(holidayRem?.isOverdue).toBe(true);
+  });
+
+  it("Holiday 8 days ago → no reminder", () => {
+    // Valentine's Day (02-14), today is Feb 22 (8 days later)
+    const today = new Date('2026-02-22T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      nextCadenceDue: '2026-06-25'
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    const holidayRem = reminders.find(r => r.reasons.includes('holiday') && r.labels.includes("Valentine's Day"));
+    expect(holidayRem).toBeUndefined();
+  });
+
+  it("Anniversary yesterday, dealer not texted → reminder appears with isOverdue=true and dueDate=yesterday's date", () => {
+    const today = new Date('2027-05-20T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      purchaseDate: '2026-05-19T12:00:00Z', // purchase exactly 1 year + 1 day ago
+      nextCadenceDue: '2027-06-25'
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    const annivRem = reminders.find(r => r.reasons.includes('anniversary'));
+    expect(annivRem).toBeDefined();
+    expect(annivRem?.dueDate).toBe('2027-05-19');
+    expect(annivRem?.isOverdue).toBe(true);
+  });
+
+  it("Late-December birthday seen in early January (year boundary)", () => {
+    // today=2027-01-03, dob=1985-12-28 → birthday reminder appears with dueDate=2026-12-28, isOverdue=true.
+    const today = new Date('2027-01-03T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      dob: '1985-12-28', // birthday on Dec 28
+      nextCadenceDue: '2027-06-25'
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    const bdayRem = reminders.find(r => r.reasons.includes('birthday'));
+    expect(bdayRem).toBeDefined();
+    expect(bdayRem?.dueDate).toBe('2026-12-28');
+    expect(bdayRem?.isOverdue).toBe(true);
+  });
+
+  it("Purchase at 9am today, dealer texts at 6pm today → followUp24h does NOT fire", () => {
+    // purchase = 2026-05-20T09:00:00Z
+    // texted = 2026-05-20T18:00:00Z
+    // today = 2026-05-21T10:00:00Z
+    const today = new Date('2026-05-21T10:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      purchaseDate: '2026-05-20T09:00:00Z',
+      lastContactedAt: '2026-05-20T18:00:00Z' // texted after purchase on same day, satisfies 24h follow up
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    const followUp = reminders.find(r => r.reasons.includes('followUp24h'));
+    expect(followUp).toBeUndefined();
+  });
 });

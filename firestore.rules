@@ -103,7 +103,12 @@ service cloud.firestore {
         && (!('nextCadenceDue' in data) || (data.nextCadenceDue is string && data.nextCadenceDue.size() <= 30))
         && (!('manualReminders' in data) || (data.manualReminders is list && data.manualReminders.size() <= 50))
         && (!('purchaseDate' in data) || (data.purchaseDate is string && data.purchaseDate.size() <= 30))
-        && (!('referralAskedAt' in data) || (data.referralAskedAt is string && data.referralAskedAt.size() <= 30));
+        && (!('referralAskedAt' in data) || (data.referralAskedAt is string && data.referralAskedAt.size() <= 30))
+
+        // Bulk Intake lead metadata
+        && (!('leadSource' in data) || (data.leadSource is string && data.leadSource.size() <= 200))
+        && (!('leadGeneratedDate' in data) || (data.leadGeneratedDate is string && data.leadGeneratedDate.size() <= 20))
+        && (!('pendingInterestNotes' in data) || (data.pendingInterestNotes is string && data.pendingInterestNotes.size() <= 500));
     }
 
     function isValidNote(data) {
@@ -146,7 +151,8 @@ service cloud.firestore {
           'tradeValueFairLow', 'tradeValueFairHigh',
           'tradeValueSource', 'tradeValueCondition',
           'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
-          'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt'
+          'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
+          'leadSource', 'leadGeneratedDate', 'pendingInterestNotes'
         ])
         && incoming().createdAt == request.time
         && (incoming().updatedAt == request.time || !('updatedAt' in incoming()))
@@ -175,7 +181,8 @@ service cloud.firestore {
             'tradeValueFairLow', 'tradeValueFairHigh',
             'tradeValueSource', 'tradeValueCondition',
             'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
-            'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt'
+            'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
+            'leadSource', 'leadGeneratedDate', 'pendingInterestNotes'
           ])
         )
         && (incoming().get('updatedAt', request.time) == request.time);

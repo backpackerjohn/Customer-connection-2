@@ -352,4 +352,51 @@ describe('Firestore rules — Customer collection', () => {
       })
     );
   });
+
+  it('25. Valid leadSource and leadGeneratedDate and pendingInterestNotes accepted', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'customers/lead25'), validCustomer({
+        leadSource: 'Showroom Floor / Manual / Walk-In',
+        leadGeneratedDate: '2025-05-31',
+        pendingInterestNotes: 'Also interested in 2017 Ram 1500 (Used)'
+      }))
+    );
+  });
+
+  it('26. leadSource over 200 chars rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/lead26'), validCustomer({
+        leadSource: 'x'.repeat(201)
+      }))
+    );
+  });
+
+  it('27. leadGeneratedDate over 20 chars rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/lead27'), validCustomer({
+        leadGeneratedDate: '2025-05-31T00:00:00.000Z_extra'
+      }))
+    );
+  });
+
+  it('28. pendingInterestNotes over 500 chars rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/lead28'), validCustomer({
+        pendingInterestNotes: 'x'.repeat(501)
+      }))
+    );
+  });
+
+  it('29. leadSource of wrong type (number) rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/lead29'), validCustomer({
+        leadSource: 12345 as unknown as string
+      }))
+    );
+  });
 });

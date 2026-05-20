@@ -34,8 +34,11 @@ export async function extractBulkCustomers(image: { inlineData: { data: string; 
     - dlNumber: Driver's license number
     - dlState: License state
     - dlExpiration: License expiration date (format: YYYY-MM-DD, ISO 8601)
-    - vehicleStock, vehicleYear, vehicleMake, vehicleModel, vehicleVin, vehicleMiles: Vehicle interested in. (If a vehicle is noted as "interested in", it MUST map to these new-vehicle fields, NEVER to trade-in fields).
-    - tradeYear, tradeMake, tradeModel, tradeTrim, tradeMileage, tradeVin: Trade-in details
+    - vehicleStock, vehicleYear, vehicleMake, vehicleModel, vehicleVin, vehicleMiles: Vehicle of interest (i.e. the vehicle the customer wants to buy). A vehicle tagged "(New)" or "(Used)" in the source MUST map to these fields, NEVER to trade-in fields. A vehicle described as "interested in" or "lead vehicle" MUST also map here.
+    - hasTradeIn (boolean) + tradeYear, tradeMake, tradeModel, tradeTrim, tradeMileage, tradeVin: Trade-In (i.e. the vehicle the customer is giving up). A vehicle tagged "(Trade-In)" in the source MUST map here and you MUST set hasTradeIn=true. A vehicle described as "trade", "trade-in", or "giving up" MUST also map here.
+    - leadSource: The lead source string from the source row. Extract from text like "- Source: Showroom Floor / Manual / Walk-In" → "Showroom Floor / Manual / Walk-In". Preserve casing and separators exactly as shown.
+    - leadGeneratedDate: The "Generated a Lead" date for this customer, formatted as YYYY-MM-DD. Extract from text like "Generated a Lead: 05/31/2025" → "2025-05-31".
+    - pendingInterestNotes: If a customer has MORE THAN ONE vehicle of interest (multiple vehicles tagged "(New)" or "(Used)" — NOT the trade-in), put the FIRST one into the vehicleXxx fields, and put any additional ones into this field as human-readable lines joined by "; ". Example: "Also interested: 2017 Ram 1500 (Used); 2014 Honda Civic (Used)". If there is only one vehicle of interest, omit this field.
     - insuranceCompany, agentName: Insurance details
     - stillOwe, lienholder, payoffAmount, monthlyPayment, monthsRemaining: Financial details
     - payingCash: true if the customer indicated they are paying cash for the new vehicle; false otherwise (financing or unspecified)
@@ -113,7 +116,10 @@ export async function extractBulkCustomers(image: { inlineData: { data: string; 
                   goalsMoneyDown: { type: Type.STRING },
                   goalsCreditScore: { type: Type.STRING },
                   customerDesiredTradeValue: { type: Type.STRING },
-                  status: { type: Type.STRING, enum: ["active", "inactive", "lead"] }
+                  status: { type: Type.STRING, enum: ["active", "inactive", "lead"] },
+                  leadSource: { type: Type.STRING },
+                  leadGeneratedDate: { type: Type.STRING },
+                  pendingInterestNotes: { type: Type.STRING }
                 },
                 propertyOrdering: [
                   "firstName", "middleInitial", "lastName", "dob", "phone", "email",
@@ -122,7 +128,8 @@ export async function extractBulkCustomers(image: { inlineData: { data: string; 
                   "insuranceCompany", "agentName", "hasTradeIn", "tradeYear", "tradeMake",
                   "tradeModel", "tradeTrim", "tradeMileage", "tradeVin", "stillOwe",
                   "lienholder", "payoffAmount", "monthlyPayment", "monthsRemaining", "payingCash",
-                  "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status"
+                  "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status",
+                  "leadSource", "leadGeneratedDate", "pendingInterestNotes"
                 ]
               }
             }
@@ -148,6 +155,11 @@ export async function extractBulkCustomers(image: { inlineData: { data: string; 
         const iso = toISODate(c.dlExpiration);
         if (iso) c.dlExpiration = iso;
         else delete c.dlExpiration;
+      }
+      if (c.leadGeneratedDate) {
+        const iso = toISODate(c.leadGeneratedDate);
+        if (iso) c.leadGeneratedDate = iso;
+        else delete c.leadGeneratedDate;
       }
     }
 

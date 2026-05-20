@@ -90,8 +90,6 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
     setIsTyping(true);
 
     try {
-      console.log("Starting AI chat process...", { userMessage, hasImage: !!imageFile });
-      
       // Map history to Gemini format
       const history = messages.slice(1).map(m => ({
         role: (m.role === 'assistant' ? 'model' : 'user') as 'model' | 'user',
@@ -99,7 +97,6 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
       }));
 
       const response = await processCustomerChat(userMessage || "Extracted from image", currentCustomer, history, imageData);
-      console.log("AI Response received:", response);
       
       let finalMessage = response.message;
       let suggestionData: { label: string; data: Record<string, unknown> } | null = null;

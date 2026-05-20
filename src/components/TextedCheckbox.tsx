@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Calendar, Check } from 'lucide-react';
 import { ReminderKind } from '../lib/reminders/engine';
 
@@ -15,15 +15,33 @@ export function TextedCheckbox({ customerId, closedKinds, onTexted }: Props) {
     return new Date().toISOString().split('T')[0];
   });
 
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleToggle = () => {
-    if (showBackfill) {
+    if (showBackfill) return;
+    
+    // If a click is already pending, the second click cancels it.
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+      setChecked(false);
       return;
     }
+    
     setChecked(true);
-    setTimeout(() => {
+    timeoutRef.current = setTimeout(() => {
       onTexted(customerId, new Date(), closedKinds);
       setChecked(false);
-    }, 200);
+      timeoutRef.current = null;
+    }, 1500);
   };
 
   const handleBackfillSubmit = (e: React.FormEvent) => {

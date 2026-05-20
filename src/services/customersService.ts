@@ -2,7 +2,7 @@ import {
   collection, addDoc, updateDoc, doc, query, where, 
   onSnapshot, serverTimestamp, Unsubscribe 
 } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { Customer } from '../types';
 import { rollNextCadence } from '../lib/reminders/engine';
 import { REMINDER_CONFIG } from '../lib/reminders/config';
@@ -44,32 +44,10 @@ export async function updateCustomer(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { id, createdAt, createdBy, ...customerData } = customer;
   
-  const payload = { ...customerData, updatedAt: 'SERVER_TIMESTAMP_SENTINEL' };
-
-  console.group('🔍 updateCustomer DEBUG');
-  console.log('customerId:', customerId);
-  console.log('current uid:', auth.currentUser?.uid);
-  console.log('payload field count:', Object.keys(payload).length);
-  console.log('payload keys:', Object.keys(payload).sort());
-  console.log('payload JSON:', JSON.stringify(payload, null, 2));
-  console.log('field types:', Object.fromEntries(
-    Object.entries(payload).map(([k, v]) => [
-      k, 
-      v === null ? 'NULL' : v === undefined ? 'UNDEFINED' : typeof v
-    ])
-  ));
-  console.groupEnd();
-
-  try {
-    await updateDoc(doc(db, 'customers', customerId), {
-      ...customerData,
-      updatedAt: serverTimestamp()
-    });
-    console.log('✅ updateDoc succeeded');
-  } catch (err) {
-    console.error('❌ updateDoc threw:', err);
-    throw err;
-  }
+  await updateDoc(doc(db, 'customers', customerId), {
+    ...customerData,
+    updatedAt: serverTimestamp()
+  });
 }
 
 /**

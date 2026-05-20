@@ -39,7 +39,8 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [rows, setRows] = useState<BatchRow[]>([]);
   const [batchProcessed, setBatchProcessed] = useState(false);
-  const [isCommiting, setIsCommiting] = useState(false);
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [processError, setProcessError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 1. Drag and Drop handlers
@@ -86,6 +87,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
     setImagePreview(null);
     setRows([]);
     setBatchProcessed(false);
+    setProcessError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -93,6 +95,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
   const processImage = async () => {
     if (!selectedFile) return;
     setIsProcessing(true);
+    setProcessError(null);
     setRows([]);
 
     try {
@@ -111,6 +114,11 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
       const imageData = await base64Promise;
 
       const extracted = await extractBulkCustomers({ inlineData: imageData });
+
+      if (extracted.length === 0) {
+        setProcessError("No customers were detected in this screenshot. Try a clearer image, or one that shows multiple customer rows.");
+        return;
+      }
 
       // Construct Initial Rows
       const initialRows: BatchRow[] = extracted.map((extractedCust, index) => {
@@ -137,6 +145,8 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
       setRows(initialRows);
       setBatchProcessed(true);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setProcessError(`Could not extract customers from the image. ${msg}`);
       console.error("Failed to parse image with Gemini:", err);
     } finally {
       setIsProcessing(false);
@@ -181,7 +191,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
 
   // 5. Commit Batch
   const createAllCustomers = async () => {
-    setIsCommiting(true);
+    setIsCommitting(true);
     const currentRows = [...rows];
 
     for (let i = 0; i < currentRows.length; i++) {
@@ -204,7 +214,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
       }
     }
 
-    setIsCommiting(false);
+    setIsCommitting(false);
   };
 
   // Helper to count results
@@ -217,7 +227,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
     return acc;
   }, { success: 0, error: 0, newCount: 0, duplicateCount: 0, skipCount: 0 });
 
-  const hasComcommitted = rows.some(r => r.status === 'success' || r.status === 'error');
+  const hasCommitted = rows.some(r => r.status === 'success' || r.status === 'error');
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-6 pb-24">
@@ -234,6 +244,22 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
           <p className="text-sm md:text-base text-gray-500">Upload screenshot listings of customer lists to extract as DB contacts.</p>
         </div>
       </header>
+
+      {processError && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl flex items-start gap-3">
+          <AlertCircle size={18} className="text-rose-600 mt-0.5 shrink-0" />
+          <div className="flex-1 text-sm">
+            {processError}
+          </div>
+          <button 
+            onClick={() => setProcessError(null)}
+            className="text-rose-500 hover:text-rose-700 shrink-0"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Main Panel */}
       {!batchProcessed ? (
@@ -347,17 +373,17 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
             <div className="flex items-center gap-2">
               <button 
                 onClick={clearFile}
-                disabled={isCommiting}
+                disabled={isCommitting}
                 className="px-4 py-2 text-sm font-semibold border border-gray-200 bg-white hover:bg-gray-50 rounded-lg transition-all disabled:opacity-50"
               >
                 Reset / Back
               </button>
               <button
                 onClick={createAllCustomers}
-                disabled={isCommiting || rows.length === 0 || hasComcommitted}
+                disabled={isCommitting || rows.length === 0 || hasCommitted}
                 className="px-5 py-2 text-sm font-semibold bg-gray-900 text-white hover:bg-gray-800 rounded-lg transition-all disabled:opacity-50 shadow-sm flex items-center gap-2 active:scale-95"
               >
-                {isCommiting ? (
+                {isCommitting ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
                     <span>Committing...</span>
@@ -373,8 +399,8 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
           </div>
 
           {/* Core Results Tracker Banner once save is complete */}
-          {hasComcommitted && !isCommiting && (
-            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {hasCommitted && !isCommitting && (
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-rose-200 text-rose-800 rounded-xl">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
                   <CheckCircle size={20} />
@@ -488,7 +514,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                         <div className="flex items-center gap-1 bg-gray-50 border border-gray-100 rounded-lg p-0.5 shadow-inner">
                           <button
                             onClick={() => handleActionChange(index, 'new')}
-                            disabled={isCommiting}
+                            disabled={isCommitting}
                             className={`px-3 py-1 text-xs rounded-md font-semibold transition-all ${
                               row.action === 'new' 
                                 ? 'bg-white text-gray-900 shadow-sm border border-gray-100' 
@@ -499,7 +525,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                           </button>
                           <button
                             onClick={() => handleActionChange(index, 'duplicate')}
-                            disabled={isCommiting}
+                            disabled={isCommitting}
                             className={`px-3 py-1 text-xs rounded-md font-semibold transition-all ${
                               row.action === 'duplicate' 
                                 ? 'bg-white text-gray-900 shadow-sm border border-gray-100' 
@@ -510,7 +536,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                           </button>
                           <button
                             onClick={() => handleActionChange(index, 'skip')}
-                            disabled={isCommiting}
+                            disabled={isCommitting}
                             className={`px-3 py-1 text-xs rounded-md font-semibold transition-all ${
                               row.action === 'skip' 
                                 ? 'bg-white text-red-600 shadow-sm border border-gray-100' 
@@ -545,7 +571,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                           type="text"
                           value={row.customer.firstName}
                           onChange={(e) => handleFieldChange(index, 'firstName', e.target.value)}
-                          disabled={isCommiting || row.status === 'success'}
+                          disabled={isCommitting || row.status === 'success'}
                           placeholder="First Name"
                           className="flex-1 text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
                         />
@@ -553,7 +579,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                           type="text"
                           value={row.customer.lastName}
                           onChange={(e) => handleFieldChange(index, 'lastName', e.target.value)}
-                          disabled={isCommiting || row.status === 'success'}
+                          disabled={isCommitting || row.status === 'success'}
                           placeholder="Last Name"
                           className="flex-1 text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
                         />
@@ -567,7 +593,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                         type="text"
                         value={row.customer.phone || ''}
                         onChange={(e) => handleFieldChange(index, 'phone', e.target.value)}
-                        disabled={isCommiting || row.status === 'success'}
+                        disabled={isCommitting || row.status === 'success'}
                         placeholder="(555) 555-5555"
                         className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
                       />
@@ -579,7 +605,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                         type="email"
                         value={row.customer.email || ''}
                         onChange={(e) => handleFieldChange(index, 'email', e.target.value)}
-                        disabled={isCommiting || row.status === 'success'}
+                        disabled={isCommitting || row.status === 'success'}
                         placeholder="john.smith@gmail.com"
                         className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
                       />
@@ -595,7 +621,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                           type="text"
                           value={row.customer.vehicleYear || ''}
                           onChange={(e) => handleFieldChange(index, 'vehicleYear', e.target.value)}
-                          disabled={isCommiting || row.status === 'success'}
+                          disabled={isCommitting || row.status === 'success'}
                           placeholder="Year (e.g. 2022)"
                           className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
                         />
@@ -605,7 +631,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                           type="text"
                           value={row.customer.vehicleMake || ''}
                           onChange={(e) => handleFieldChange(index, 'vehicleMake', e.target.value)}
-                          disabled={isCommiting || row.status === 'success'}
+                          disabled={isCommitting || row.status === 'success'}
                           placeholder="Make (e.g. Honda)"
                           className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
                         />
@@ -615,7 +641,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                           type="text"
                           value={row.customer.vehicleModel || ''}
                           onChange={(e) => handleFieldChange(index, 'vehicleModel', e.target.value)}
-                          disabled={isCommiting || row.status === 'success'}
+                          disabled={isCommitting || row.status === 'success'}
                           placeholder="Model (e.g. Civic)"
                           className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
                         />

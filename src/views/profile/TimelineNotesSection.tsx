@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MessageSquare, Plus, Calendar, Bell, Trash2 } from 'lucide-react';
 import { Customer, Note } from '../../types';
+import { RescheduleButton } from '../../components/RescheduleButton';
+import { Pencil, Check, X } from 'lucide-react';
 
 interface Props {
   customer: Customer;
@@ -9,9 +11,29 @@ interface Props {
   onNewNoteChange: (note: string) => void;
   onAddNote: () => void;
   onChange: (patch: Partial<Customer>) => void;
+  onReschedule: (customerId: string, date: string, reason: string) => void;
 }
 
-export function TimelineNotesSection({ customer, notes, newNote, onNewNoteChange, onAddNote, onChange }: Props) {
+export function TimelineNotesSection({ customer, notes, newNote, onNewNoteChange, onAddNote, onChange, onReschedule }: Props) {
+  const [isEditingNextCadence, setIsEditingNextCadence] = useState(false);
+  const [draftCadenceDate, setDraftCadenceDate] = useState('');
+
+  const startEditCadence = () => {
+    setDraftCadenceDate(customer.nextCadenceDue?.slice(0, 10) ?? '');
+    setIsEditingNextCadence(true);
+  };
+
+  const saveCadenceEdit = () => {
+    if (draftCadenceDate && /^\d{4}-\d{2}-\d{2}$/.test(draftCadenceDate)) {
+      onChange({ nextCadenceDue: draftCadenceDate });
+    }
+    setIsEditingNextCadence(false);
+  };
+
+  const cancelCadenceEdit = () => {
+    setIsEditingNextCadence(false);
+  };
+
   const handleDeleteReminder = (indexToDelete: number) => {
     if (!customer.manualReminders) return;
     const updated = customer.manualReminders.filter((_, idx) => idx !== indexToDelete);
@@ -55,10 +77,48 @@ export function TimelineNotesSection({ customer, notes, newNote, onNewNoteChange
           </div>
           <div className="space-y-1">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Next Cadence Due</span>
-            <span className="text-sm font-semibold text-gray-850 flex items-center gap-1.5">
-              <Bell size={14} className="text-gray-400" />
-              {formatDate(customer.nextCadenceDue)}
-            </span>
+            {isEditingNextCadence ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={draftCadenceDate}
+                  onChange={(e) => setDraftCadenceDate(e.target.value)}
+                  className="text-sm border border-gray-200 rounded-md px-2 py-1 text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={saveCadenceEdit}
+                  className="text-emerald-600 hover:text-emerald-700 p-1 rounded-md hover:bg-emerald-50 transition-colors"
+                  title="Save"
+                >
+                  <Check size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelCadenceEdit}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-50 transition-colors"
+                  title="Cancel"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <span className="text-sm font-semibold text-gray-850 flex items-center gap-1.5">
+                <Bell size={14} className="text-gray-400" />
+                {formatDate(customer.nextCadenceDue)}
+                {customer.id && (
+                  <button
+                    type="button"
+                    onClick={startEditCadence}
+                    className="text-gray-400 hover:text-gray-700 p-0.5 rounded-md hover:bg-gray-100 transition-colors ml-1"
+                    title="Edit next cadence date"
+                  >
+                    <Pencil size={11} />
+                  </button>
+                )}
+              </span>
+            )}
           </div>
         </div>
 
@@ -73,8 +133,18 @@ export function TimelineNotesSection({ customer, notes, newNote, onNewNoteChange
 
         {/* Custom Follow-Ups Sub-section */}
         <div className="pt-2 border-t border-gray-100 space-y-3">
-          <span className="text-[10px] font-bold text-gray-405 uppercase tracking-widest block">Custom Follow-Ups</span>
-          
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-gray-405 uppercase tracking-widest block">Custom Follow-Ups</span>
+            {customer.id && (
+              <RescheduleButton
+                customerId={customer.id}
+                onReschedule={onReschedule}
+                label="Add custom follow-up"
+                title="New Custom Follow-Up"
+              />
+            )}
+          </div>
+
           {!customer.manualReminders || customer.manualReminders.length === 0 ? (
             <p className="text-xs text-gray-400 italic">No custom follow-up reminders scheduled.</p>
           ) : (

@@ -62,6 +62,7 @@ interface Props {
     },
     options?: { skipCache?: boolean }
   ) => void;
+  onReschedule: (customerId: string, date: string, reason: string) => void;
 }
 
 export function CustomerProfileView({
@@ -85,6 +86,7 @@ export function CustomerProfileView({
   onChat,
   onTestDrive,
   onSold,
+  onReschedule,
   onTradeEstimate
 }: Props) {
   return (
@@ -128,6 +130,7 @@ export function CustomerProfileView({
           onNewNoteChange={onNewNoteChange}
           onAddNote={onAddNote}
           onChange={onUpdateCustomer}
+          onReschedule={onReschedule}
         />
       </div>
 

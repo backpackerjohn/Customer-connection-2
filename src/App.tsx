@@ -21,7 +21,7 @@ import {
 } from './services/customersService';
 import { createNote, subscribeToNotes } from './services/notesService';
 import { createContact } from './services/contactsService';
-import { ReminderKind, recordContact, computeNextCadenceDue } from './lib/reminders/engine';
+import { ReminderKind, recordContact, computeNextCadenceDue, rollNextCadence } from './lib/reminders/engine';
 import { REMINDER_CONFIG } from './lib/reminders/config';
 import { 
   buildTestDrivePacket, 
@@ -363,7 +363,18 @@ export default function App() {
       if (!currentCustomer.purchaseDate) {
         try {
           const todayISO = new Date().toISOString();
-          const patch: Partial<Customer> = { purchaseDate: todayISO };
+          // Roll a buyer-mode cadence (3–6 months out) at sale time so
+          // the customer enters standard-buyer mode on day 8 with a
+          // sensible cadence in place, even if the dealer never hits
+          // Texted during the 7-day fresh-buyer window. We deliberately
+          // do NOT stamp lastContactedAt here — that would suppress the
+          // day-1 followUp24h reminder (engine closes it when
+          // lastContactedAt > purchaseDate).
+          const nextCadence = rollNextCadence(new Date(), 'buyer', REMINDER_CONFIG);
+          const patch: Partial<Customer> = {
+            purchaseDate: todayISO,
+            nextCadenceDue: nextCadence
+          };
           await updateCustomer(currentCustomer.id!, { ...currentCustomer, ...patch });
           setCurrentCustomer(prev => ({ ...prev, ...patch }));
         } catch (stampErr) {
@@ -575,6 +586,7 @@ export default function App() {
               onTestDrive={handleTestDrive}
               onSold={handleSold}
               onTradeEstimate={handleTradeEstimate}
+              onReschedule={handleReschedule}
             />
           </motion.div>
         )}

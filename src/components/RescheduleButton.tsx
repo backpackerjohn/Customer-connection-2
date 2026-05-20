@@ -4,9 +4,11 @@ import { CalendarRange, X } from 'lucide-react';
 interface Props {
   customerId: string;
   onReschedule: (customerId: string, date: string, reason: string) => void;
+  label?: string;
+  title?: string;
 }
 
-export function RescheduleButton({ customerId, onReschedule }: Props) {
+export function RescheduleButton({ customerId, onReschedule, label = 'Reschedule', title = 'Reschedule Follow Up' }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [date, setDate] = useState(() => {
     const tom = new Date();
@@ -30,7 +32,7 @@ export function RescheduleButton({ customerId, onReschedule }: Props) {
         className="text-xs text-gray-505 hover:text-gray-900 border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 font-medium transition-colors bg-white flex items-center gap-1.5 shadow-xs shrink-0"
       >
         <CalendarRange size={14} />
-        Reschedule
+        {label}
       </button>
 
       {isOpen && (
@@ -38,7 +40,7 @@ export function RescheduleButton({ customerId, onReschedule }: Props) {
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setIsOpen(false)} />
           <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border border-gray-100 p-6 space-y-5 animate-scaleUp">
             <div className="flex items-center justify-between">
-              <h4 className="font-bold text-lg text-gray-900">Reschedule Follow Up</h4>
+              <h4 className="font-bold text-lg text-gray-900">{title}</h4>
               <button 
                 onClick={() => setIsOpen(false)}
                 className="text-gray-400 hover:text-gray-600 rounded-full p-1"

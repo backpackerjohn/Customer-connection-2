@@ -1,4 +1,4 @@
-import React, { useState, useRef, DragEvent } from 'react';
+import React, { useState, useRef, useEffect, DragEvent } from 'react';
 import { 
   Upload, 
   Trash2, 
@@ -19,6 +19,15 @@ import { extractBulkCustomers } from '../services/bulkIntakeService';
 import { findDuplicates, DuplicateMatch } from '../lib/duplicateDetection';
 import { createCustomer } from '../services/customersService';
 
+function addDaysISO(daysFromToday: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromToday);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 interface Props {
   customers: Customer[];
   user: User;
@@ -30,6 +39,7 @@ interface BatchRow {
   action: 'new' | 'duplicate' | 'skip';
   status: 'idle' | 'creating' | 'success' | 'error';
   errorMessage?: string;
+  followUpDate: string;  // ISO YYYY-MM-DD, defaults to today + 30 days on extract
 }
 
 export function BulkIntakeView({ customers, user, onComplete }: Props) {
@@ -42,6 +52,36 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
   const [isCommitting, setIsCommitting] = useState(false);
   const [processError, setProcessError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (file: File) => {
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  useEffect(() => {
+    if (batchProcessed) return;  // disable paste once review is showing
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            handleFileSelect(file);
+            return;
+          }
+        }
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [batchProcessed]);
 
   // 1. Drag and Drop handlers
   const handleDrag = (e: DragEvent<HTMLDivElement>) => {
@@ -71,15 +111,6 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
     if (e.target.files && e.target.files[0]) {
       handleFileSelect(e.target.files[0]);
     }
-  };
-
-  const handleFileSelect = (file: File) => {
-    setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
   };
 
   const clearFile = () => {
@@ -138,7 +169,8 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
         return {
           customer: rowCust,
           action: hasStrong ? 'duplicate' : 'new',
-          status: 'idle'
+          status: 'idle',
+          followUpDate: addDaysISO(30)
         };
       });
 
@@ -205,7 +237,12 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
       setRows(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'creating' } : r));
 
       try {
-        await createCustomer(user.uid, row.customer);
+        const todayISO = addDaysISO(0);
+        await createCustomer(user.uid, {
+          ...row.customer,
+          nextCadenceDue: row.followUpDate,
+          lastContactedAt: todayISO
+        });
         setRows(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'success' } : r));
       } catch (err: unknown) {
         console.error(`Error creating customer at row ${i + 1}:`, err);
@@ -302,6 +339,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                   </button>
                 </p>
                 <p className="text-xs text-gray-400/80">Supports PNG, JPG, JPEG. Digital screenshot text ONLY.</p>
+                <p className="text-xs text-gray-400/80">Tip: paste a screenshot directly with Ctrl+V / ⌘V.</p>
               </div>
             </div>
           </div>
@@ -398,6 +436,32 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-xl border border-gray-100">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Set follow-up for all</span>
+            <div className="flex items-center gap-1">
+              {[3, 7, 14, 30].map(d => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setRows(prev => prev.map(r => ({ ...r, followUpDate: addDaysISO(d) })))}
+                  disabled={isCommitting || hasCommitted}
+                  className="text-xs font-semibold px-2.5 py-1 rounded-md border bg-white text-gray-700 border-gray-200 hover:bg-gray-50 transition-all"
+                >
+                  {d}d
+                </button>
+              ))}
+              <input
+                type="date"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v) setRows(prev => prev.map(r => ({ ...r, followUpDate: v })));
+                }}
+                disabled={isCommitting || hasCommitted}
+                className="text-xs bg-white border border-gray-200 rounded-md px-2 py-1 text-gray-900 ml-1"
+              />
+            </div>
+          </div>
+
           {/* Core Results Tracker Banner once save is complete */}
           {hasCommitted && !isCommitting && (
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-rose-200 text-rose-800 rounded-xl">
@@ -485,6 +549,12 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                               </span>
                             )}
                           </>
+                        )}
+
+                        {row.customer.leadSource && (
+                          <span className="text-[10px] uppercase tracking-wider text-gray-500 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full font-medium">
+                            {row.customer.leadSource}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -611,40 +681,110 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                       />
                     </div>
 
-                    {/* New Vehicle interest Info */}
-                    <div className="space-y-1 md:col-span-4 grid grid-cols-3 gap-3 pt-1 border-t border-gray-50 mt-1">
-                      <div className="space-y-1 col-span-3">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Current / Target Vehicle Interest</label>
+                    {/* Vehicle of Interest */}
+                    <div className="space-y-1 md:col-span-4 grid grid-cols-3 gap-3 pt-3 border-t border-gray-50 mt-1">
+                      <div className="space-y-1 col-span-3 flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Vehicle of Interest</label>
                       </div>
-                      <div>
-                        <input 
-                          type="text"
-                          value={row.customer.vehicleYear || ''}
-                          onChange={(e) => handleFieldChange(index, 'vehicleYear', e.target.value)}
-                          disabled={isCommitting || row.status === 'success'}
-                          placeholder="Year (e.g. 2022)"
-                          className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
-                        />
+                      <input 
+                        type="text"
+                        value={row.customer.vehicleYear || ''}
+                        onChange={(e) => handleFieldChange(index, 'vehicleYear', e.target.value)}
+                        disabled={isCommitting || row.status === 'success'}
+                        placeholder="Year (e.g. 2022)"
+                        className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
+                      />
+                      <input 
+                        type="text"
+                        value={row.customer.vehicleMake || ''}
+                        onChange={(e) => handleFieldChange(index, 'vehicleMake', e.target.value)}
+                        disabled={isCommitting || row.status === 'success'}
+                        placeholder="Make (e.g. Honda)"
+                        className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
+                      />
+                      <input 
+                        type="text"
+                        value={row.customer.vehicleModel || ''}
+                        onChange={(e) => handleFieldChange(index, 'vehicleModel', e.target.value)}
+                        disabled={isCommitting || row.status === 'success'}
+                        placeholder="Model (e.g. Civic)"
+                        className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
+                      />
+                    </div>
+
+                    {/* Trade-In */}
+                    <div className="space-y-1 md:col-span-4 pt-3 border-t border-gray-50 mt-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Trade-In</label>
+                        <label className="flex items-center gap-2 text-xs font-medium text-gray-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!row.customer.hasTradeIn}
+                            onChange={(e) => handleFieldChange(index, 'hasTradeIn', e.target.checked)}
+                            disabled={isCommitting || row.status === 'success'}
+                            className="h-3.5 w-3.5 rounded border-gray-300 text-gray-900 focus:ring-0"
+                          />
+                          Has trade-in
+                        </label>
                       </div>
-                      <div>
-                        <input 
-                          type="text"
-                          value={row.customer.vehicleMake || ''}
-                          onChange={(e) => handleFieldChange(index, 'vehicleMake', e.target.value)}
-                          disabled={isCommitting || row.status === 'success'}
-                          placeholder="Make (e.g. Honda)"
-                          className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
-                        />
-                      </div>
-                      <div>
-                        <input 
-                          type="text"
-                          value={row.customer.vehicleModel || ''}
-                          onChange={(e) => handleFieldChange(index, 'vehicleModel', e.target.value)}
-                          disabled={isCommitting || row.status === 'success'}
-                          placeholder="Model (e.g. Civic)"
-                          className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
-                        />
+                      {row.customer.hasTradeIn && (
+                        <div className="grid grid-cols-3 gap-3">
+                          <input 
+                            type="text"
+                            value={row.customer.tradeYear || ''}
+                            onChange={(e) => handleFieldChange(index, 'tradeYear', e.target.value)}
+                            disabled={isCommitting || row.status === 'success'}
+                            placeholder="Year (e.g. 2018)"
+                            className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
+                          />
+                          <input 
+                            type="text"
+                            value={row.customer.tradeMake || ''}
+                            onChange={(e) => handleFieldChange(index, 'tradeMake', e.target.value)}
+                            disabled={isCommitting || row.status === 'success'}
+                            placeholder="Make (e.g. Hyundai)"
+                            className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
+                          />
+                          <input 
+                            type="text"
+                            value={row.customer.tradeModel || ''}
+                            onChange={(e) => handleFieldChange(index, 'tradeModel', e.target.value)}
+                            disabled={isCommitting || row.status === 'success'}
+                            placeholder="Model (e.g. Elantra)"
+                            className="w-full text-sm bg-white border border-gray-200 focus:border-gray-300 focus:outline-none rounded-lg px-3 py-1.5 text-gray-900 h-9"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Follow-Up */}
+                    <div className="space-y-1 md:col-span-4 pt-3 border-t border-gray-50 mt-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Follow-Up Reminder</label>
+                        <div className="flex items-center gap-1">
+                          {[3, 7, 14, 30].map(d => (
+                            <button
+                              key={d}
+                              type="button"
+                              onClick={() => setRows(prev => prev.map((r, i) => i === index ? { ...r, followUpDate: addDaysISO(d) } : r))}
+                              disabled={isCommitting || row.status === 'success'}
+                              className={`text-xs font-semibold px-2.5 py-1 rounded-md border transition-all ${
+                                row.followUpDate === addDaysISO(d)
+                                  ? 'bg-gray-900 text-white border-gray-900'
+                                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                              }`}
+                            >
+                              {d}d
+                            </button>
+                          ))}
+                          <input
+                            type="date"
+                            value={row.followUpDate}
+                            onChange={(e) => setRows(prev => prev.map((r, i) => i === index ? { ...r, followUpDate: e.target.value } : r))}
+                            disabled={isCommitting || row.status === 'success'}
+                            className="text-xs bg-white border border-gray-200 rounded-md px-2 py-1 text-gray-900 ml-1"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -654,6 +794,13 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                     <div className="text-xs text-rose-600 bg-rose-50/50 p-2.5 rounded-lg border border-rose-100 flex items-center gap-2 mt-2">
                       <AlertCircle size={14} />
                       <span>{row.errorMessage}</span>
+                    </div>
+                  )}
+
+                  {row.customer.pendingInterestNotes && (
+                    <div className="text-xs text-amber-800 bg-amber-50/60 p-2.5 rounded-lg border border-amber-100 flex items-start gap-2 mt-2">
+                      <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                      <span>Source listed additional interests: {row.customer.pendingInterestNotes}. Add manually after commit.</span>
                     </div>
                   )}
                 </motion.div>

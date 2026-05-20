@@ -107,6 +107,30 @@ export function CustomerInfoSection({ customer, onChange }: Props) {
             />
           </div>
         </div>
+        {(customer.leadSource || customer.leadGeneratedDate || customer.pendingInterestNotes) && (
+          <div className="space-y-3 pt-4 border-t border-gray-50">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lead Origin</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              {customer.leadSource && (
+                <div>
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Source</div>
+                  <div className="text-gray-900">{customer.leadSource}</div>
+                </div>
+              )}
+              {customer.leadGeneratedDate && (
+                <div>
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lead Generated</div>
+                  <div className="text-gray-900">{customer.leadGeneratedDate}</div>
+                </div>
+              )}
+            </div>
+            {customer.pendingInterestNotes && (
+              <div className="text-xs text-amber-800 bg-amber-50/60 p-2.5 rounded-lg border border-amber-100">
+                <span className="font-semibold">Source listed additional interests:</span> {customer.pendingInterestNotes}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );

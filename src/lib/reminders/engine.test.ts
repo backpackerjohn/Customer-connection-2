@@ -47,9 +47,9 @@ describe('Reminders Engine', () => {
     expect(reminders[0].isOverdue).toBe(false);
   });
 
-  it('Cadence due Mon + birthday Wed -> ONE combined DueReminder with reasons=["cadence","birthday"]', () => {
+  it('Cadence due Mon + birthday Wed -> ONE combined DueReminder anchored on birthday', () => {
     // Mon is 2026-05-18, Wed is 2026-05-20.
-    // Let's run on Wed, 2026-05-20, so that both are active.
+    // Run on Wed, 2026-05-20, so that both are active.
     const today = new Date('2026-05-20'); // Wed
     const customer: Customer = {
       ...baseCustomer,
@@ -60,7 +60,8 @@ describe('Reminders Engine', () => {
     expect(reminders.length).toBe(1);
     expect(reminders[0].reasons).toContain('cadence');
     expect(reminders[0].reasons).toContain('birthday');
-    expect(reminders[0].dueDate).toBe('2026-05-18'); // earliest
+    expect(reminders[0].dueDate).toBe('2026-05-20'); // birthday wins as anchor (weight 2 > cadence weight 4)
+    expect(reminders[0].isOverdue).toBe(false);
   });
 
   it('Manual reminder for today -> appears', () => {
@@ -227,15 +228,27 @@ describe('Reminders Engine', () => {
     expect(hRem?.labels).toContain('Independence Day');
   });
 
-  it('On Dec 30, the upcoming New Year\'s Day reminder appears (year+1 lookup)', () => {
+  it('On Dec 30 with no cadence nearby, New Year\'s Day does NOT appear yet (standalone holidays wait for their date)', () => {
     const today = new Date('2026-12-30T12:00:00Z');
     const customer: Customer = {
       ...baseCustomer,
-      nextCadenceDue: '2027-01-30' // not due
+      nextCadenceDue: '2027-01-30' // far away, nothing to combine with
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    const hRem = reminders.find(r => r.labels.includes("New Year's Day"));
+    expect(hRem).toBeUndefined();
+  });
+
+  it('On Jan 1, New Year\'s Day reminder appears (year+1 lookup carries over the year boundary)', () => {
+    const today = new Date('2027-01-01T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      nextCadenceDue: '2027-02-01' // not due, not nearby
     };
     const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
     const hRem = reminders.find(r => r.labels.includes("New Year's Day"));
     expect(hRem).toBeDefined();
+    expect(hRem?.dueDate).toBe('2027-01-01');
   });
 
   it('Editing config.holidays() to omit Christmas removes it from the engine output', () => {
@@ -366,5 +379,94 @@ describe('Reminders Engine', () => {
     const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
     const followUp = reminders.find(r => r.reasons.includes('followUp24h'));
     expect(followUp).toBeUndefined();
+  });
+
+  // --- NEW: anchor-on-heaviest combining + no-early-standalone behavior ---
+
+  it("Standalone Memorial Day 5 days away with cadence 30 days out -> NOT shown today (the bulk-intake follow-up case)", () => {
+    // Today 2026-05-20, Memorial Day 2026-05-25, cadence 2026-06-19. Nothing to combine.
+    const today = new Date('2026-05-20T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      nextCadenceDue: '2026-06-19',
+      lastContactedAt: '2026-05-20T12:00:00Z'
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    const memDay = reminders.find(r => r.labels.includes('Memorial Day'));
+    expect(memDay).toBeUndefined();
+    expect(reminders.length).toBe(0);
+  });
+
+  it("Memorial Day on its actual day with no other reminders -> shown alone", () => {
+    const today = new Date('2026-05-25T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      nextCadenceDue: '2026-06-19' // not nearby
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    const memDay = reminders.find(r => r.labels.includes('Memorial Day'));
+    expect(memDay).toBeDefined();
+    expect(memDay?.dueDate).toBe('2026-05-25');
+    expect(memDay?.reasons).toEqual(['holiday']);
+  });
+
+  it("Cadence due Friday + Memorial Day Monday (same week) -> combined card anchored on Memorial Day", () => {
+    // 2026-05-22 = Friday, 2026-05-25 = Memorial Day Monday. Run on Memorial Day.
+    const today = new Date('2026-05-25T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      nextCadenceDue: '2026-05-22' // overdue by 3 days as of Memorial Day
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    expect(reminders.length).toBe(1);
+    expect(reminders[0].dueDate).toBe('2026-05-25'); // holiday wins as anchor
+    expect(reminders[0].reasons).toContain('cadence');
+    expect(reminders[0].reasons).toContain('holiday');
+    expect(reminders[0].labels).toContain('Memorial Day');
+  });
+
+  it("Manual reminder + holiday in same week -> manual wins (anchored on manual's date)", () => {
+    // Manual 2026-05-22 'Call about insurance', Memorial Day 2026-05-25.
+    // Run on the manual's date.
+    const today = new Date('2026-05-22T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      nextCadenceDue: '2026-07-01', // far
+      manualReminders: [{ date: '2026-05-22', reason: 'Call about insurance' }]
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    expect(reminders.length).toBe(1);
+    expect(reminders[0].dueDate).toBe('2026-05-22'); // manual outweighs holiday
+    expect(reminders[0].reasons).toContain('manual');
+    expect(reminders[0].reasons).toContain('holiday');
+    expect(reminders[0].labels).toContain('Call about insurance');
+    expect(reminders[0].labels).toContain('Memorial Day');
+  });
+
+  it("Cadence due today + Memorial Day 5 days away -> NOT shown today (cadence absorbed forward)", () => {
+    // Today 2026-05-20, cadence due today, Memorial Day in 5 days. They combine
+    // (5 days apart), holiday wins as anchor, anchor is in the future, dropped from today.
+    const today = new Date('2026-05-20T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      nextCadenceDue: '2026-05-20'
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    expect(reminders.length).toBe(0);
+  });
+
+  it("Cadence absorbed forward by holiday -> resurfaces as a combined card on the holiday's day", () => {
+    // Same customer state as the previous test, but run on Memorial Day.
+    const today = new Date('2026-05-25T12:00:00Z');
+    const customer: Customer = {
+      ...baseCustomer,
+      nextCadenceDue: '2026-05-20' // overdue by 5 days at Memorial Day
+    };
+    const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
+    expect(reminders.length).toBe(1);
+    expect(reminders[0].dueDate).toBe('2026-05-25'); // holiday anchors
+    expect(reminders[0].reasons).toContain('cadence');
+    expect(reminders[0].reasons).toContain('holiday');
+    expect(reminders[0].isOverdue).toBe(false); // anchor == today
   });
 });

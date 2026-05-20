@@ -38,6 +38,19 @@ function getDaysDiff(s1: string, s2: string): number {
   return Math.round(diffTime / (1000 * 60 * 60 * 24));
 }
 
+// Weight for combining/anchor selection. Lower number = "heavier" =
+// wins as the display date when multiple reminders combine. Ties
+// broken by earlier date.
+const REMINDER_WEIGHT: Record<ReminderKind, number> = {
+  manual: 1,
+  anniversary: 2,
+  birthday: 2,
+  holiday: 3,
+  cadence: 4,
+  followUp24h: 99,        // fresh-buyer-only; never reaches combining
+  referral48to72h: 99,    // fresh-buyer-only; never reaches combining
+};
+
 export function rollNextCadence(today: Date, mode: 'lead' | 'buyer', config: ReminderConfig): string {
   const d = new Date(today);
   if (mode === 'lead') {
@@ -125,17 +138,44 @@ export function getDueReminders(customer: Customer, today: Date, config: Reminde
   }
 
   // --- NON-FRESH-BUYER MODE (either Lead or standard Buyer) ---
+  //
+  // Today's view shows ONLY what is anchored to today or overdue. The
+  // combineWindow has two purposes:
+  //   (a) Pull in upcoming cadence/manual/calendar items within the next
+  //       combineWindow days so we can detect same-week combining.
+  //   (b) Group items that fall within combineWindow days of each other
+  //       into a single reminder card.
+  //
+  // After grouping, each card's display date is the date of its
+  // heaviest-weight item (manual > birthday == anniversary > holiday >
+  // cadence; ties → earliest date). Cards whose anchor date is in the
+  // future are dropped from today's view — they will surface when their
+  // anchor date arrives.
 
-  // 1. Cadence
+  const gracePeriodDays = config.calendarReminders?.gracePeriodDays ?? 7;
+  const combineWindow = hasPurchaseDate ? config.buyer.combineWindowDays : config.lead.combineWindowDays;
+
+  const lookAhead = new Date(today);
+  lookAhead.setDate(today.getDate() + combineWindow);
+  const lookAheadStr = formatDateISO(lookAhead);
+
+  const minDate = new Date(today);
+  minDate.setDate(today.getDate() - gracePeriodDays);
+  const minDateStr = formatDateISO(minDate);
+
+  const lastContactedPart = customer.lastContactedAt ? formatDateISO(new Date(customer.lastContactedAt)) : '';
+
+  // 1. Cadence — pulled in if due today, overdue, or within combineWindow
+  //    forward (so it can be absorbed by an imminent calendar event).
   if (hasPurchaseDate) {
     const nextCadence = customer.nextCadenceDue;
     if (!nextCadence) {
       const startStr = customer.lastContactedAt ? formatDateISO(new Date(customer.lastContactedAt)) : customer.purchaseDate!;
       const defaultCadence = rollNextCadence(parseDateString(startStr), 'buyer', config);
-      if (defaultCadence <= todayStr) {
+      if (defaultCadence <= lookAheadStr) {
         individualReminders.push({ dueDate: defaultCadence, reason: 'cadence' });
       }
-    } else if (nextCadence <= todayStr) {
+    } else if (nextCadence <= lookAheadStr) {
       individualReminders.push({ dueDate: nextCadence, reason: 'cadence' });
     }
   } else {
@@ -143,41 +183,30 @@ export function getDueReminders(customer: Customer, today: Date, config: Reminde
     const nextCadence = customer.nextCadenceDue;
     if (!nextCadence) {
       individualReminders.push({ dueDate: todayStr, reason: 'cadence' });
-    } else if (nextCadence <= todayStr) {
+    } else if (nextCadence <= lookAheadStr) {
       individualReminders.push({ dueDate: nextCadence, reason: 'cadence' });
     }
   }
 
-  // 2. Manual Reminders
+  // 2. Manual reminders — same window logic as cadence.
   if (customer.manualReminders && Array.isArray(customer.manualReminders)) {
     for (const rem of customer.manualReminders) {
-      if (rem.date && rem.date <= todayStr) {
-        individualReminders.push({ 
-          dueDate: rem.date, 
-          reason: 'manual', 
-          label: rem.reason 
+      if (rem.date && rem.date >= minDateStr && rem.date <= lookAheadStr) {
+        individualReminders.push({
+          dueDate: rem.date,
+          reason: 'manual',
+          label: rem.reason
         });
       }
     }
   }
 
-  // 3. Calendar Reminders with candidate window (Grace Period + Combine Window)
+  // 3. Calendar candidates (birthdays, anniversaries, holidays) within the
+  //    grace + combine window.
   const years = [today.getFullYear() - 1, today.getFullYear(), today.getFullYear() + 1];
-  const gracePeriodDays = config.calendarReminders?.gracePeriodDays ?? 7;
-  const combineWindow = hasPurchaseDate ? config.buyer.combineWindowDays : config.lead.combineWindowDays;
-
-  const minDate = new Date(today);
-  minDate.setDate(today.getDate() - gracePeriodDays);
-  const minDateStr = formatDateISO(minDate);
-
-  const maxDate = new Date(today);
-  maxDate.setDate(today.getDate() + combineWindow);
-  const maxDateStr = formatDateISO(maxDate);
-
-  const lastContactedPart = customer.lastContactedAt ? formatDateISO(new Date(customer.lastContactedAt)) : '';
 
   function addCandidate(dateISO: string, reason: ReminderKind, label?: string) {
-    if (dateISO < minDateStr || dateISO > maxDateStr) {
+    if (dateISO < minDateStr || dateISO > lookAheadStr) {
       return;
     }
     const handled = !!lastContactedPart && lastContactedPart >= dateISO;
@@ -226,10 +255,11 @@ export function getDueReminders(customer: Customer, today: Date, config: Reminde
 
   if (individualReminders.length === 0) return [];
 
-  // Sort ascending by target date
+  // Sort ascending by date — used by the greedy grouping below.
   individualReminders.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
-  // Combine adjacent/nearby reminders
+  // Combine reminders within combineWindow days of each other (same-week
+  // combining). Greedy: anchor on the first member of each group.
   const groups: typeof individualReminders[] = [];
   for (const rem of individualReminders) {
     let merged = false;
@@ -246,33 +276,37 @@ export function getDueReminders(customer: Customer, today: Date, config: Reminde
     }
   }
 
-  return groups.map(group => {
-    group.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-    const earliestDueDate = group[0].dueDate;
+  // Pick each group's display date: the heaviest-weight reason wins
+  // (manual > anniversary == birthday > holiday > cadence; ties broken
+  // by earlier date). Then drop any group whose display date is in the
+  // future — Today's view is strictly today or overdue.
+  const result: DueReminder[] = [];
+  for (const group of groups) {
+    const sorted = [...group].sort((a, b) => {
+      const wDiff = REMINDER_WEIGHT[a.reason] - REMINDER_WEIGHT[b.reason];
+      if (wDiff !== 0) return wDiff;
+      return a.dueDate.localeCompare(b.dueDate);
+    });
+    const anchorDate = sorted[0].dueDate;
+
+    if (anchorDate > todayStr) continue;
 
     const reasonsSet = new Set<ReminderKind>();
-    for (const item of group) {
-      reasonsSet.add(item.reason);
-    }
-    const reasons = Array.from(reasonsSet);
+    for (const item of group) reasonsSet.add(item.reason);
 
     const labelsSet = new Set<string>();
-    for (const item of group) {
-      if (item.label) {
-        labelsSet.add(item.label);
-      }
-    }
-    const labels = Array.from(labelsSet);
-    const isOverdue = earliestDueDate < todayStr;
+    for (const item of group) if (item.label) labelsSet.add(item.label);
 
-    return {
+    result.push({
       customerId: customer.id!,
-      dueDate: earliestDueDate,
-      reasons,
-      labels,
-      isOverdue
-    };
-  });
+      dueDate: anchorDate,
+      reasons: Array.from(reasonsSet),
+      labels: Array.from(labelsSet),
+      isOverdue: anchorDate < todayStr
+    });
+  }
+
+  return result;
 }
 
 export function recordContact(

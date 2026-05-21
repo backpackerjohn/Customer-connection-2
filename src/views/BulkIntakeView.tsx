@@ -18,6 +18,9 @@ import { Customer, emptyCustomer } from '../types';
 import { extractBulkCustomers } from '../services/bulkIntakeService';
 import { findDuplicates, DuplicateMatch } from '../lib/duplicateDetection';
 import { createCustomer } from '../services/customersService';
+import { EditableChip } from '../components/EditableChip';
+import { rollNextCadence } from '../lib/reminders/engine';
+import { REMINDER_CONFIG } from '../lib/reminders/config';
 
 function addDaysISO(daysFromToday: number): string {
   const d = new Date();
@@ -27,6 +30,36 @@ function addDaysISO(daysFromToday: number): string {
   const dd = String(d.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
+
+function deriveLeadSourceType(leadSource?: string): Customer['leadSourceType'] | undefined {
+  if (!leadSource) return undefined;
+  const s = leadSource.toLowerCase();
+  if (s.includes('walk') && s.includes('in')) return 'walk-in';
+  if (s.includes('showroom')) return 'showroom';
+  if (s.includes('referral')) return 'referral';
+  if (s.includes('vep')) return 'vep';
+  if (s.includes('crm')) return 'crm';
+  if (s.includes('phone') || s.includes('call')) return 'phone';
+  if (s.includes('web') || s.includes('internet') || s.includes('online')) return 'web';
+  return 'other';
+}
+
+const STATUS_CHIP_OPTIONS = [
+  { value: 'lead' as const, label: 'Unsold' },
+  { value: 'sold' as const, label: 'Sold' },
+  { value: 'inactive' as const, label: 'Inactive' },
+];
+
+const SOURCE_CHIP_OPTIONS = [
+  { value: 'walk-in' as const, label: 'Walk-In' },
+  { value: 'crm' as const, label: 'CRM' },
+  { value: 'referral' as const, label: 'Referral' },
+  { value: 'vep' as const, label: 'VEP' },
+  { value: 'showroom' as const, label: 'Showroom' },
+  { value: 'phone' as const, label: 'Phone' },
+  { value: 'web' as const, label: 'Web / Internet' },
+  { value: 'other' as const, label: 'Other' },
+];
 
 interface Props {
   customers: Customer[];
@@ -153,10 +186,12 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
 
       // Construct Initial Rows
       const initialRows: BatchRow[] = extracted.map((extractedCust, index) => {
+        const derivedSourceType = extractedCust.leadSourceType ?? deriveLeadSourceType(extractedCust.leadSource);
         const rowCust = {
           ...emptyCustomer,
           ...extractedCust,
-          status: 'lead' as const
+          status: 'lead' as const,
+          ...(derivedSourceType ? { leadSourceType: derivedSourceType } : {})
         };
 
         // Pre-evaluate duplicates against already existing DB customers and prior rows inside batch
@@ -238,11 +273,29 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
 
       try {
         const todayISO = addDaysISO(0);
-        await createCustomer(user.uid, {
-          ...row.customer,
-          nextCadenceDue: row.followUpDate,
-          lastContactedAt: todayISO
-        });
+        let payload: Customer;
+        if (row.customer.status === 'sold') {
+          // Full Sold flow: stamp purchaseDate, roll buyer cadence, set
+          // lastContactedAt to today. Engine then auto-fires followUp24h
+          // tomorrow + referral48to72h on day 2/3. The dealer's followUpDate
+          // chip is intentionally overridden here.
+          const purchaseISO = new Date().toISOString();
+          const nextCadence = rollNextCadence(new Date(), 'buyer', REMINDER_CONFIG);
+          payload = {
+            ...row.customer,
+            purchaseDate: purchaseISO,
+            nextCadenceDue: nextCadence,
+            lastContactedAt: todayISO
+          };
+        } else {
+          // Lead path (default): use the dealer's chip-selected follow-up date.
+          payload = {
+            ...row.customer,
+            nextCadenceDue: row.followUpDate,
+            lastContactedAt: todayISO
+          };
+        }
+        await createCustomer(user.uid, payload);
         setRows(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'success' } : r));
       } catch (err: unknown) {
         console.error(`Error creating customer at row ${i + 1}:`, err);
@@ -551,11 +604,22 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                           </>
                         )}
 
-                        {row.customer.leadSource && (
-                          <span className="text-[10px] uppercase tracking-wider text-gray-500 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full font-medium">
-                            {row.customer.leadSource}
-                          </span>
-                        )}
+                        <EditableChip
+                          value={row.customer.status}
+                          options={STATUS_CHIP_OPTIONS}
+                          onChange={(v) => v && handleFieldChange(index, 'status', v)}
+                          color={row.customer.status === 'sold' ? 'emerald' : row.customer.status === 'inactive' ? 'gray' : 'blue'}
+                          disabled={isCommitting || row.status === 'success'}
+                        />
+                        <EditableChip
+                          value={row.customer.leadSourceType}
+                          options={SOURCE_CHIP_OPTIONS}
+                          onChange={(v) => handleFieldChange(index, 'leadSourceType', v)}
+                          placeholder={row.customer.leadSource ? row.customer.leadSource : '— Source —'}
+                          color="gray"
+                          allowClear
+                          disabled={isCommitting || row.status === 'success'}
+                        />
                       </div>
                     </div>
 

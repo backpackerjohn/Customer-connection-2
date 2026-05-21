@@ -51,7 +51,7 @@ A mobile-first dealer CRM. Dealers sign in with Google, create customer profiles
 - `src/lib/timing.ts` — `timed(label, fn)` performance instrumentation helper.
 
 ### Components
-- `src/components/` — atomic UI primitives: `InputField`, `Toggle`, `StatusBadge`, `SaveStatusIndicator`, `MenuButton`, `SubButton`, `NavItem`, `NavIconButton`, `AIChatOverlay`, `RescheduleButton`, `TextedCheckbox`, `TradeEquityPanel`, `VinLookupButtons`.
+- `src/components/` — atomic UI primitives: `InputField`, `Toggle`, `StatusBadge`, `SaveStatusIndicator`, `MenuButton`, `SubButton`, `NavItem`, `NavIconButton`, `AIChatOverlay`, `RescheduleButton`, `TextedCheckbox`, `TradeEquityPanel`, `VinLookupButtons`, `EditableChip` (click-to-expand chip with popover, used for status + leadSourceType on profile and Bulk Intake rows).
 
 ### Views
 - `src/views/LoginView.tsx` — Google sign-in screen.
@@ -123,6 +123,15 @@ HTML `<input type="date">` only displays values formatted as YYYY-MM-DD. The AI 
 - On commit, each customer doc is written with `nextCadenceDue = followUpDate` and `lastContactedAt = today` so the lead drops cleanly into the reminder engine.
 - Duplicate detection (`findDuplicates`) flags rows matching existing customers OR earlier rows in the batch as `strong` / `weak` / `household`. The default action is `duplicate` (skip) for strong matches; user can override per row.
 
+### Status & Source taxonomy
+
+- `status: 'lead' | 'sold' | 'inactive'` — funnel position. Default `'lead'` (via `emptyCustomer`). The internal value `'lead'` displays as **"Unsold"** in `StatusBadge` and `EditableChip`. The Sold button auto-flips to `'sold'`; dealers can also manually edit via the chip row above the Customer Info card on the customer profile, or per-row in the Bulk Intake review screen.
+- `leadSourceType: 'walk-in' | 'crm' | 'referral' | 'vep' | 'showroom' | 'phone' | 'web' | 'other'` — optional structured source tag. Coexists with the free-text `leadSource` (raw CRM-extracted string preserved for context). The structured tag drives chip displays and is filter-friendly.
+- Bulk Intake derives `leadSourceType` client-side from raw `leadSource` text via the `deriveLeadSourceType` heuristic in `BulkIntakeView.tsx`. The dealer can override per row via the chip BEFORE commit.
+- `aiService.processCustomerChat` extracts `leadSourceType` from chat input. `bulkIntakeService.extractBulkCustomers` deliberately does NOT — the bulk path uses the heuristic + chip override. Intentional exception to the "both extractors must stay in sync" gotcha.
+- Bulk Intake commit branches on row status: if `status === 'sold'`, applies the full Sold flow (stamp `purchaseDate`, roll buyer cadence via `rollNextCadence('buyer')`, override followUpDate to today). Otherwise the lead path: `nextCadenceDue = row.followUpDate`, `lastContactedAt = today`.
+- The chip UI is implemented by `src/components/EditableChip.tsx` — generic over the option string type, supports a `color` (blue/emerald/gray/amber), `placeholder` (when value is undefined), and optional `allowClear` (adds a "— None —" entry).
+
 ## Do not touch
 
 - **Unwired placeholder sub-buttons** in `src/views/CustomerProfileView.tsx` bottom action bar:
@@ -141,9 +150,9 @@ HTML `<input type="date">` only displays values formatted as YYYY-MM-DD. The AI 
 
 - The Gemini model id is `gemini-2.5-flash`. `gemini-3-flash-preview` was a real bug that returned an empty response and silently broke extraction. Don't change the model id without verifying it exists.
 - The Gemini response schema MUST include `propertyOrdering` on every object. Without it, Gemini omits later properties and you get partial extraction.
-- There are TWO Gemini customer extractors with independent schemas (`aiService.processCustomerChat` for chat, `bulkIntakeService.extractBulkCustomers` for screenshots). Adding a Customer field means updating BOTH schemas, BOTH system instructions, AND (for dates) both normalization blocks.
+- There are TWO Gemini customer extractors with independent schemas (`aiService.processCustomerChat` for chat, `bulkIntakeService.extractBulkCustomers` for screenshots). Adding a Customer field means updating BOTH schemas, BOTH system instructions, AND (for dates) both normalization blocks. Exception: `leadSourceType` is intentionally extracted only by `aiService`; the bulk path uses the `deriveLeadSourceType` heuristic in `BulkIntakeView.tsx` + dealer chip override.
 - Setting `purchaseDate` is not just a date stamp — it triggers a cadence-mode transition in the reminder engine (lead → fresh buyer → standard buyer). The "Sold" button writes it; manual edits in `NewVehicleSection` also flip the customer's reminder behavior.
-- Setting `purchaseDate` is not just a date stamp — it triggers a cadence-mode transition in the reminder engine (lead → fresh buyer → standard buyer). The "Sold" button writes it AND proactively rolls a buyer-mode `nextCadenceDue` (3–6 months out) so standard-buyer mode on day 8 has a sensible cadence date in place even if the dealer never hits Texted during the fresh-buyer window. Manual edits in `NewVehicleSection` also flip the customer's reminder behavior, but they do NOT roll the cadence — leftover lead cadence persists until the next Texted event.
+- Setting `purchaseDate` is not just a date stamp — it triggers a cadence-mode transition in the reminder engine (lead → fresh buyer → standard buyer). The "Sold" button writes it, proactively rolls a buyer-mode `nextCadenceDue` (3–6 months out), AND flips `status='sold'`. The Bulk Intake commit path mirrors this when a preview row is marked Sold before commit (stamps `purchaseDate`, rolls buyer cadence, overrides the row's followUpDate). Manual edits to `purchaseDate` in `NewVehicleSection` flip reminder behavior but do NOT roll the cadence or change `status` — leftover lead state persists until the next Texted event or explicit profile edit.
 - The Sold flow deliberately does NOT stamp `lastContactedAt` at sale time. The fresh-buyer engine closes the day-1 `followUp24h` reminder when `lastContactedAt > purchaseDate`; stamping the two equal (or off-by-microseconds) risks accidentally suppressing the day-1 follow-up. The dealer's first Texted post-sale stamps `lastContactedAt` correctly.
 - `noUnusedLocals` is on. If you add a destructured variable you don't use, prefix with underscore or destructure differently — don't add `eslint-disable` unless there's a real reason (`id` strip in `customersService` and the `hasAnyData` destructure in `App.tsx` are the canonical examples).
 - Auto-save's effect dependency array includes `pendingAINotes` and `pendingImages`. Buffering either one resets the 2s debounce. This is acceptable.

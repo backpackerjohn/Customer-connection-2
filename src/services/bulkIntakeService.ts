@@ -44,7 +44,7 @@ export async function extractBulkCustomers(image: { inlineData: { data: string; 
     - payingCash: true if the customer indicated they are paying cash for the new vehicle; false otherwise (financing or unspecified)
     - goalsMonthlyPayment, goalsMoneyDown, goalsCreditScore: Customer goals
     - customerDesiredTradeValue: Customer's desired trade value
-    - status: Customer status (defaults to "lead" unless another status is explicitly clear, e.g. "active", "inactive", "lead")
+    - status: Customer funnel position. Default to "lead" unless the source clearly indicates another value. One of: "lead", "sold", "inactive". (Bulk-imported customers should almost always be "lead".)
 
     RULES:
     1. Extract ALL customers visible in the screenshot. Do not stop at the first few.
@@ -116,7 +116,7 @@ export async function extractBulkCustomers(image: { inlineData: { data: string; 
                   goalsMoneyDown: { type: Type.STRING },
                   goalsCreditScore: { type: Type.STRING },
                   customerDesiredTradeValue: { type: Type.STRING },
-                  status: { type: Type.STRING, enum: ["active", "inactive", "lead"] },
+                  status: { type: Type.STRING, enum: ["lead", "sold", "inactive"] },
                   leadSource: { type: Type.STRING },
                   leadGeneratedDate: { type: Type.STRING },
                   pendingInterestNotes: { type: Type.STRING }

@@ -59,7 +59,8 @@ export async function processCustomerChat(
     - payingCash: true if the customer indicated they are paying cash for the new vehicle; false otherwise (financing or unspecified)
     - goalsMonthlyPayment, goalsMoneyDown, goalsCreditScore: Customer goals
     - customerDesiredTradeValue: Customer's desired trade-in value (what they're asking for the trade).
-    - status: Customer status ("active", "inactive", "lead")
+    - status: Customer funnel position. One of: "lead" (default — in the buying funnel; displayed to dealers as "Unsold"), "sold" (already bought), "inactive" (lead went cold). Default to "lead" if unclear.
+    - leadSourceType: Structured source tag. One of: "walk-in", "crm", "referral", "vep" (Vehicle Exchange Program), "showroom", "phone", "web", "other". Only emit when the source is clearly indicated; otherwise omit.
     - purchaseDate: Date the customer bought their vehicle (YYYY-MM-DD)
  
      RULES:
@@ -140,7 +141,8 @@ export async function processCustomerChat(
                   goalsMoneyDown: { type: Type.STRING },
                   goalsCreditScore: { type: Type.STRING },
                   customerDesiredTradeValue: { type: Type.STRING },
-                  status: { type: Type.STRING, enum: ["active", "inactive", "lead"] },
+                  status: { type: Type.STRING, enum: ["lead", "sold", "inactive"] },
+                  leadSourceType: { type: Type.STRING, enum: ["walk-in", "crm", "referral", "vep", "showroom", "phone", "web", "other"] },
                   purchaseDate: { type: Type.STRING }
                 },
                 propertyOrdering: [
@@ -150,7 +152,7 @@ export async function processCustomerChat(
                   "insuranceCompany", "agentName", "hasTradeIn", "tradeYear", "tradeMake",
                   "tradeModel", "tradeTrim", "tradeMileage", "tradeVin", "stillOwe",
                   "lienholder", "payoffAmount", "monthlyPayment", "monthsRemaining", "payingCash",
-                  "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status", "purchaseDate"
+                  "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status", "leadSourceType", "purchaseDate"
                 ]
               },
               inventoryStockFound: { type: Type.STRING, description: "If a vehicle stock number is found in the text or image, put it here." },

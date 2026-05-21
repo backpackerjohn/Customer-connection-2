@@ -373,7 +373,8 @@ export default function App() {
           const nextCadence = rollNextCadence(new Date(), 'buyer', REMINDER_CONFIG);
           const patch: Partial<Customer> = {
             purchaseDate: todayISO,
-            nextCadenceDue: nextCadence
+            nextCadenceDue: nextCadence,
+            status: 'sold'
           };
           await updateCustomer(currentCustomer.id!, { ...currentCustomer, ...patch });
           setCurrentCustomer(prev => ({ ...prev, ...patch }));

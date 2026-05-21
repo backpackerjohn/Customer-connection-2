@@ -23,6 +23,7 @@ import { Customer, Note } from '../types';
 import { SaveStatusIndicator } from '../components/SaveStatusIndicator';
 import { MenuButton } from '../components/MenuButton';
 import { SubButton } from '../components/SubButton';
+import { EditableChip } from '../components/EditableChip';
 import { CustomerInfoSection } from './profile/CustomerInfoSection';
 import { InsuranceSection } from './profile/InsuranceSection';
 import { NewVehicleSection } from './profile/NewVehicleSection';
@@ -112,6 +113,40 @@ export function CustomerProfileView({
       </div>
 
       <div className="p-6 space-y-12 pb-32">
+        <div className="px-2">
+          <div className="card p-4 flex flex-wrap items-center gap-3">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</span>
+            <EditableChip
+              value={currentCustomer.status}
+              options={[
+                { value: 'lead', label: 'Unsold' },
+                { value: 'sold', label: 'Sold' },
+                { value: 'inactive', label: 'Inactive' },
+              ]}
+              onChange={(v) => v && onUpdateCustomer({ status: v })}
+              color={currentCustomer.status === 'sold' ? 'emerald' : currentCustomer.status === 'inactive' ? 'gray' : 'blue'}
+            />
+            <span className="h-4 w-[1px] bg-gray-200" />
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Lead Source</span>
+            <EditableChip
+              value={currentCustomer.leadSourceType}
+              options={[
+                { value: 'walk-in', label: 'Walk-In' },
+                { value: 'crm', label: 'CRM' },
+                { value: 'referral', label: 'Referral' },
+                { value: 'vep', label: 'VEP' },
+                { value: 'showroom', label: 'Showroom' },
+                { value: 'phone', label: 'Phone' },
+                { value: 'web', label: 'Web / Internet' },
+                { value: 'other', label: 'Other' },
+              ]}
+              onChange={(v) => onUpdateCustomer({ leadSourceType: v })}
+              placeholder="— Not set —"
+              color="gray"
+              allowClear
+            />
+          </div>
+        </div>
         <CustomerInfoSection customer={currentCustomer} onChange={onUpdateCustomer} />
         <InsuranceSection customer={currentCustomer} onChange={onUpdateCustomer} />
         <NewVehicleSection customer={currentCustomer} onChange={onUpdateCustomer} />

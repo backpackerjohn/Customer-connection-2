@@ -51,7 +51,14 @@ export function DashboardView({ customers, onNewCustomer, onEditCustomer }: Prop
                   <h3 className="font-bold text-lg leading-tight">
                     {customer.firstName} {customer.middleInitial ? customer.middleInitial + ' ' : ''}{customer.lastName}
                   </h3>
-                  <StatusBadge status={customer.status} />
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <StatusBadge status={customer.status} />
+                    {customer.leadSourceType && (
+                      <span className="text-[9px] uppercase tracking-wider text-gray-500 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full font-medium">
+                        {customer.leadSourceType.replace('-', ' ')}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="text-sm text-gray-500 space-y-1">
                   <p>{customer.email}</p>

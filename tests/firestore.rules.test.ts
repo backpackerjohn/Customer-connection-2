@@ -399,4 +399,40 @@ describe('Firestore rules — Customer collection', () => {
       }))
     );
   });
+
+  it('30. status="sold" accepted on create', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'customers/v30'), validCustomer({
+        status: 'sold'
+      }))
+    );
+  });
+
+  it('31. status="active" (legacy value) rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/v31'), validCustomer({
+        status: 'active' as unknown as 'lead'
+      }))
+    );
+  });
+
+  it('32. Valid leadSourceType accepted', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'customers/v32'), validCustomer({
+        leadSourceType: 'walk-in'
+      }))
+    );
+  });
+
+  it('33. leadSourceType over 30 chars rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/v33'), validCustomer({
+        leadSourceType: 'x'.repeat(31)
+      }))
+    );
+  });
 });

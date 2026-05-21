@@ -33,7 +33,7 @@ service cloud.firestore {
 
     // --- Customer Validation ---
     function isValidCustomer(data) {
-      return (data.get('status', 'lead') in ['active', 'inactive', 'lead'])
+      return (data.get('status', 'lead') in ['lead', 'sold', 'inactive'])
         && (data.get('hasTradeIn', false) is bool)
         && (data.get('stillOwe', false) is bool)
         && (data.get('payingCash', false) is bool)
@@ -107,6 +107,7 @@ service cloud.firestore {
 
         // Bulk Intake lead metadata
         && (!('leadSource' in data) || (data.leadSource is string && data.leadSource.size() <= 200))
+        && (!('leadSourceType' in data) || (data.leadSourceType is string && data.leadSourceType.size() <= 30))
         && (!('leadGeneratedDate' in data) || (data.leadGeneratedDate is string && data.leadGeneratedDate.size() <= 20))
         && (!('pendingInterestNotes' in data) || (data.pendingInterestNotes is string && data.pendingInterestNotes.size() <= 500));
     }
@@ -152,7 +153,7 @@ service cloud.firestore {
           'tradeValueSource', 'tradeValueCondition',
           'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
           'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
-          'leadSource', 'leadGeneratedDate', 'pendingInterestNotes'
+          'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes'
         ])
         && incoming().createdAt == request.time
         && (incoming().updatedAt == request.time || !('updatedAt' in incoming()))
@@ -182,7 +183,7 @@ service cloud.firestore {
             'tradeValueSource', 'tradeValueCondition',
             'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
             'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
-            'leadSource', 'leadGeneratedDate', 'pendingInterestNotes'
+            'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes'
           ])
         )
         && (incoming().get('updatedAt', request.time) == request.time);

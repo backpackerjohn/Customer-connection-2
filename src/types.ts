@@ -58,13 +58,14 @@ export interface Customer {
   goalsMonthlyPayment?: string;
   goalsMoneyDown?: string;
   goalsCreditScore?: string;
-  status: 'active' | 'inactive' | 'lead';
+  status: 'lead' | 'sold' | 'inactive';
   lastContactedAt?: string;
   nextCadenceDue?: string;
   manualReminders?: { date: string; reason: string }[];
   purchaseDate?: string;         // ISO date, set by Sold button
   referralAskedAt?: string;      // ISO date, set when the referral reminder is checked off
   leadSource?: string;           // free-text source label captured by Bulk Intake
+  leadSourceType?: 'walk-in' | 'crm' | 'referral' | 'vep' | 'showroom' | 'phone' | 'web' | 'other';
   leadGeneratedDate?: string;    // ISO date YYYY-MM-DD, captured by Bulk Intake
   pendingInterestNotes?: string; // free text holding secondary vehicle interests dropped at intake
   createdAt?: FirestoreTimestamp;

@@ -11,7 +11,12 @@ const ai = new GoogleGenAI({
   }
 });
 
-export async function extractBulkCustomers(image: { inlineData: { data: string; mimeType: string } }): Promise<Partial<Customer>[]> {
+export interface BulkExtractedRow extends Partial<Customer> {
+  lastActionType?: 'note' | 'text' | 'task';
+  lastActionDate?: string;
+}
+
+export async function extractBulkCustomers(image: { inlineData: { data: string; mimeType: string } }): Promise<BulkExtractedRow[]> {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not set");
   }
@@ -45,6 +50,8 @@ export async function extractBulkCustomers(image: { inlineData: { data: string; 
     - goalsMonthlyPayment, goalsMoneyDown, goalsCreditScore: Customer goals
     - customerDesiredTradeValue: Customer's desired trade value
     - status: Customer funnel position. Default to "lead" unless the source clearly indicates another value. One of: "lead", "sold", "inactive". (Bulk-imported customers should almost always be "lead".)
+    - lastActionType: The type of the most recent dealer action shown in the "Last Action" column, if present. ONLY emit one of: "note" (e.g. "New Note"), "text" (e.g. "Text Message", "New Text"), or "task" (e.g. "New Task"). If the Last Action is anything else (Voicemail, Email, Call, etc.) OR the column is empty, OMIT this field.
+    - lastActionDate: The date of the most recent Last Action, formatted as YYYY-MM-DD. Extract from text like "New Note (05/20/2026 05:30 AM)" → "2026-05-20". If no Last Action date is present, omit this field.
 
     RULES:
     1. Extract ALL customers visible in the screenshot. Do not stop at the first few.
@@ -119,7 +126,9 @@ export async function extractBulkCustomers(image: { inlineData: { data: string; 
                   status: { type: Type.STRING, enum: ["lead", "sold", "inactive"] },
                   leadSource: { type: Type.STRING },
                   leadGeneratedDate: { type: Type.STRING },
-                  pendingInterestNotes: { type: Type.STRING }
+                  pendingInterestNotes: { type: Type.STRING },
+                  lastActionType: { type: Type.STRING, enum: ["note", "text", "task"] },
+                  lastActionDate: { type: Type.STRING }
                 },
                 propertyOrdering: [
                   "firstName", "middleInitial", "lastName", "dob", "phone", "email",
@@ -129,7 +138,7 @@ export async function extractBulkCustomers(image: { inlineData: { data: string; 
                   "tradeModel", "tradeTrim", "tradeMileage", "tradeVin", "stillOwe",
                   "lienholder", "payoffAmount", "monthlyPayment", "monthsRemaining", "payingCash",
                   "goalsMonthlyPayment", "goalsMoneyDown", "goalsCreditScore", "customerDesiredTradeValue", "status",
-                  "leadSource", "leadGeneratedDate", "pendingInterestNotes"
+                  "leadSource", "leadGeneratedDate", "pendingInterestNotes", "lastActionType", "lastActionDate"
                 ]
               }
             }
@@ -160,6 +169,11 @@ export async function extractBulkCustomers(image: { inlineData: { data: string; 
         const iso = toISODate(c.leadGeneratedDate);
         if (iso) c.leadGeneratedDate = iso;
         else delete c.leadGeneratedDate;
+      }
+      if (c.lastActionDate) {
+        const iso = toISODate(c.lastActionDate);
+        if (iso) c.lastActionDate = iso;
+        else delete c.lastActionDate;
       }
     }
 

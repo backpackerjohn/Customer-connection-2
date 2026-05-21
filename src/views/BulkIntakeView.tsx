@@ -32,16 +32,36 @@ function addDaysISO(daysFromToday: number): string {
 }
 
 function deriveLeadSourceType(leadSource?: string): Customer['leadSourceType'] | undefined {
+  // Parse the 3rd slash-separated field of CRM source strings like
+  // "Showroom Floor / Manual / Walk-In". Only three auto-derivable
+  // values; everything else falls through to dealer chip override.
   if (!leadSource) return undefined;
-  const s = leadSource.toLowerCase();
-  if (s.includes('walk') && s.includes('in')) return 'walk-in';
-  if (s.includes('showroom')) return 'showroom';
-  if (s.includes('referral')) return 'referral';
-  if (s.includes('vep')) return 'vep';
-  if (s.includes('crm')) return 'crm';
-  if (s.includes('phone') || s.includes('call')) return 'phone';
-  if (s.includes('web') || s.includes('internet') || s.includes('online')) return 'web';
-  return 'other';
+  const parts = leadSource.split('/').map(p => p.trim());
+  if (parts.length < 3) return undefined;
+  const third = parts[2].toLowerCase();
+  if (third.includes('service customer') || third.includes('vep')) return 'vep';
+  if (third.includes('phone up') || third === 'phone') return 'crm';
+  if (third.includes('walk')) return 'walk-in';
+  return undefined;
+}
+
+function followUpFromAction(lastActionType: string | undefined, lastActionDate: string | undefined): string {
+  // If the "Last Action" was a Note or Text, treat the action date as
+  // the last real customer contact and roll the next follow-up off it.
+  // Tasks and missing values fall back to the default "today + 30".
+  if ((lastActionType !== 'note' && lastActionType !== 'text') || !lastActionDate) {
+    return addDaysISO(30);
+  }
+  const actionMs = new Date(lastActionDate + 'T00:00:00').getTime();
+  const todayMs = new Date(new Date().setHours(0, 0, 0, 0)).getTime();
+  const ageDays = Math.floor((todayMs - actionMs) / (1000 * 60 * 60 * 24));
+  if (ageDays > 30) return addDaysISO(0);
+  const d = new Date(lastActionDate + 'T00:00:00');
+  d.setDate(d.getDate() + 30);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 const STATUS_CHIP_OPTIONS = [
@@ -53,12 +73,9 @@ const STATUS_CHIP_OPTIONS = [
 const SOURCE_CHIP_OPTIONS = [
   { value: 'walk-in' as const, label: 'Walk-In' },
   { value: 'crm' as const, label: 'CRM' },
-  { value: 'referral' as const, label: 'Referral' },
   { value: 'vep' as const, label: 'VEP' },
-  { value: 'showroom' as const, label: 'Showroom' },
-  { value: 'phone' as const, label: 'Phone' },
-  { value: 'web' as const, label: 'Web / Internet' },
-  { value: 'other' as const, label: 'Other' },
+  { value: 'dealer-wizard' as const, label: 'Dealer Wizard' },
+  { value: 'fb-marketplace' as const, label: 'FB Marketplace' },
 ];
 
 interface Props {
@@ -72,7 +89,9 @@ interface BatchRow {
   action: 'new' | 'duplicate' | 'skip';
   status: 'idle' | 'creating' | 'success' | 'error';
   errorMessage?: string;
-  followUpDate: string;  // ISO YYYY-MM-DD, defaults to today + 30 days on extract
+  followUpDate: string;       // ISO YYYY-MM-DD
+  lastActionType?: 'note' | 'text' | 'task';
+  lastActionDate?: string;    // ISO YYYY-MM-DD; transient from "Last Action" column in source CRM
 }
 
 export function BulkIntakeView({ customers, user, onComplete }: Props) {
@@ -186,10 +205,11 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
 
       // Construct Initial Rows
       const initialRows: BatchRow[] = extracted.map((extractedCust, index) => {
-        const derivedSourceType = extractedCust.leadSourceType ?? deriveLeadSourceType(extractedCust.leadSource);
+        const { lastActionType, lastActionDate, ...customerFields } = extractedCust;
+        const derivedSourceType = customerFields.leadSourceType ?? deriveLeadSourceType(customerFields.leadSource);
         const rowCust = {
           ...emptyCustomer,
-          ...extractedCust,
+          ...customerFields,
           status: 'lead' as const,
           ...(derivedSourceType ? { leadSourceType: derivedSourceType } : {})
         };
@@ -205,7 +225,9 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
           customer: rowCust,
           action: hasStrong ? 'duplicate' : 'new',
           status: 'idle',
-          followUpDate: addDaysISO(30)
+          followUpDate: followUpFromAction(lastActionType, lastActionDate),
+          lastActionType,
+          lastActionDate,
         };
       });
 
@@ -289,10 +311,15 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
           };
         } else {
           // Lead path (default): use the dealer's chip-selected follow-up date.
+          // If the AI extracted a Note/Text Last Action, stamp lastContactedAt
+          // with that date so the engine treats it as the real last contact.
+          const leadLastContactedAt = (row.lastActionType === 'note' || row.lastActionType === 'text') && row.lastActionDate
+            ? row.lastActionDate
+            : todayISO;
           payload = {
             ...row.customer,
             nextCadenceDue: row.followUpDate,
-            lastContactedAt: todayISO
+            lastContactedAt: leadLastContactedAt
           };
         }
         await createCustomer(user.uid, payload);

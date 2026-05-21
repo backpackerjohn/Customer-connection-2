@@ -129,18 +129,31 @@ export function CustomerProfileView({
             <span className="h-4 w-[1px] bg-gray-200" />
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Lead Source</span>
             <EditableChip
-              value={currentCustomer.leadSourceType}
+              value={currentCustomer.leadSourceType as 'walk-in' | 'crm' | 'vep' | 'dealer-wizard' | 'fb-marketplace' | undefined}
               options={[
                 { value: 'walk-in', label: 'Walk-In' },
                 { value: 'crm', label: 'CRM' },
-                { value: 'referral', label: 'Referral' },
                 { value: 'vep', label: 'VEP' },
-                { value: 'showroom', label: 'Showroom' },
-                { value: 'phone', label: 'Phone' },
-                { value: 'web', label: 'Web / Internet' },
-                { value: 'other', label: 'Other' },
+                { value: 'dealer-wizard', label: 'Dealer Wizard' },
+                { value: 'fb-marketplace', label: 'FB Marketplace' },
               ]}
               onChange={(v) => onUpdateCustomer({ leadSourceType: v })}
+              placeholder="— Not set —"
+              color="gray"
+              allowClear
+            />
+            <span className="h-4 w-[1px] bg-gray-200" />
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Contact</span>
+            <EditableChip
+              value={currentCustomer.contactChannel}
+              options={[
+                { value: 'text', label: 'Text' },
+                { value: 'crm-text', label: 'CRM Text' },
+                { value: 'email', label: 'Email' },
+                { value: 'snapchat', label: 'Snapchat' },
+                { value: 'facebook', label: 'Facebook' },
+              ]}
+              onChange={(v) => onUpdateCustomer({ contactChannel: v })}
               placeholder="— Not set —"
               color="gray"
               allowClear

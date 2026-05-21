@@ -109,7 +109,10 @@ service cloud.firestore {
         && (!('leadSource' in data) || (data.leadSource is string && data.leadSource.size() <= 200))
         && (!('leadSourceType' in data) || (data.leadSourceType is string && data.leadSourceType.size() <= 30))
         && (!('leadGeneratedDate' in data) || (data.leadGeneratedDate is string && data.leadGeneratedDate.size() <= 20))
-        && (!('pendingInterestNotes' in data) || (data.pendingInterestNotes is string && data.pendingInterestNotes.size() <= 500));
+        && (!('pendingInterestNotes' in data) || (data.pendingInterestNotes is string && data.pendingInterestNotes.size() <= 500))
+
+        // Communication channel
+        && (!('contactChannel' in data) || (data.contactChannel is string && data.contactChannel.size() <= 30));
     }
 
     function isValidNote(data) {
@@ -153,7 +156,7 @@ service cloud.firestore {
           'tradeValueSource', 'tradeValueCondition',
           'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
           'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
-          'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes'
+          'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel'
         ])
         && incoming().createdAt == request.time
         && (incoming().updatedAt == request.time || !('updatedAt' in incoming()))
@@ -183,7 +186,7 @@ service cloud.firestore {
             'tradeValueSource', 'tradeValueCondition',
             'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
             'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
-            'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes'
+            'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel'
           ])
         )
         && (incoming().get('updatedAt', request.time) == request.time);

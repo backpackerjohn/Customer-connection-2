@@ -65,7 +65,8 @@ export interface Customer {
   purchaseDate?: string;         // ISO date, set by Sold button
   referralAskedAt?: string;      // ISO date, set when the referral reminder is checked off
   leadSource?: string;           // free-text source label captured by Bulk Intake
-  leadSourceType?: 'walk-in' | 'crm' | 'referral' | 'vep' | 'showroom' | 'phone' | 'web' | 'other';
+  leadSourceType?: 'walk-in' | 'crm' | 'vep' | 'dealer-wizard' | 'fb-marketplace' | 'referral' | 'showroom' | 'phone' | 'web' | 'other';
+  contactChannel?: 'text' | 'crm-text' | 'email' | 'snapchat' | 'facebook';
   leadGeneratedDate?: string;    // ISO date YYYY-MM-DD, captured by Bulk Intake
   pendingInterestNotes?: string; // free text holding secondary vehicle interests dropped at intake
   createdAt?: FirestoreTimestamp;

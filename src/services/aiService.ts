@@ -60,7 +60,7 @@ export async function processCustomerChat(
     - goalsMonthlyPayment, goalsMoneyDown, goalsCreditScore: Customer goals
     - customerDesiredTradeValue: Customer's desired trade-in value (what they're asking for the trade).
     - status: Customer funnel position. One of: "lead" (default — in the buying funnel; displayed to dealers as "Unsold"), "sold" (already bought), "inactive" (lead went cold). Default to "lead" if unclear.
-    - leadSourceType: Structured source tag. One of: "walk-in", "crm", "referral", "vep" (Vehicle Exchange Program), "showroom", "phone", "web", "other". Only emit when the source is clearly indicated; otherwise omit.
+    - leadSourceType: Structured source tag. ONLY emit one of: "walk-in" (customer walked into the dealership), "crm" (CRM lead / phone up), or "vep" (Vehicle Exchange Program / Service Customer). Do NOT emit other values — Dealer Wizard, FB Marketplace, and any other source require manual dealer entry via the profile chip. If the source is unclear, omit the field.
     - purchaseDate: Date the customer bought their vehicle (YYYY-MM-DD)
  
      RULES:
@@ -142,7 +142,7 @@ export async function processCustomerChat(
                   goalsCreditScore: { type: Type.STRING },
                   customerDesiredTradeValue: { type: Type.STRING },
                   status: { type: Type.STRING, enum: ["lead", "sold", "inactive"] },
-                  leadSourceType: { type: Type.STRING, enum: ["walk-in", "crm", "referral", "vep", "showroom", "phone", "web", "other"] },
+                  leadSourceType: { type: Type.STRING, enum: ["walk-in", "crm", "vep"] },
                   purchaseDate: { type: Type.STRING }
                 },
                 propertyOrdering: [

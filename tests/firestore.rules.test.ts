@@ -435,4 +435,22 @@ describe('Firestore rules — Customer collection', () => {
       }))
     );
   });
+
+  it('34. Valid contactChannel accepted', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'customers/v34'), validCustomer({
+        contactChannel: 'text'
+      }))
+    );
+  });
+
+  it('35. contactChannel over 30 chars rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/v35'), validCustomer({
+        contactChannel: 'x'.repeat(31)
+      }))
+    );
+  });
 });

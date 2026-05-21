@@ -12,11 +12,11 @@ service cloud.firestore {
     }
 
     function isOwner(data) {
-      return isSignedIn() && data.createdBy == request.auth.uid;
+      return isSignedIn() && data.get('createdBy', null) == request.auth.uid;
     }
 
     function isNoteAuthor(data) {
-      return isSignedIn() && data.authorId == request.auth.uid;
+      return isSignedIn() && data.get('authorId', null) == request.auth.uid;
     }
 
     function isValidId(id) {
@@ -113,17 +113,17 @@ service cloud.firestore {
     }
 
     function isValidNote(data) {
-      return data.content is string && data.content.size() <= 5000
-        && data.type in ['manual', 'ai', 'transcript']
-        && data.authorId == request.auth.uid;
+      return data.get('content', '') is string && data.get('content', '').size() <= 5000
+        && data.get('type', '') in ['manual', 'ai', 'transcript']
+        && data.get('authorId', null) == request.auth.uid;
     }
 
     function isValidContact(data) {
       let note = data.get('note', '');
       let attestedAt = data.get('attestedAt', '');
-      return data.authorId == request.auth.uid
-        && data.kinds is list
-        && data.kinds.size() <= 10
+      return data.get('authorId', null) == request.auth.uid
+        && data.get('kinds', []) is list
+        && data.get('kinds', []).size() <= 10
         && note is string
         && note.size() <= 1000
         && attestedAt is string
@@ -133,7 +133,7 @@ service cloud.firestore {
     // --- Collection Routes ---
     match /customers/{customerId} {
       allow get: if isValidId(customerId) && isOwner(existing());
-      allow list: if isSignedIn() && resource.data.createdBy == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.get('createdBy', null) == request.auth.uid;
       
       allow create: if isSignedIn() 
         && isValidId(customerId)
@@ -161,11 +161,11 @@ service cloud.firestore {
         
       allow update: if isSignedIn()
         && isValidId(customerId)
-        && (isOwner(existing()) || existing().createdBy == null) // Handle legacy docs without createdBy
+        && (isOwner(existing()) || existing().get('createdBy', null) == null) // Handle legacy docs without createdBy
         && isValidCustomer(incoming())
         // Immutable check
-        && (incoming().get('createdAt', existing().createdAt) == existing().createdAt)
-        && (incoming().get('createdBy', existing().createdBy) == existing().createdBy)
+        && (incoming().get('createdAt', existing().get('createdAt', null)) == existing().get('createdAt', null))
+        && (incoming().get('createdBy', existing().get('createdBy', null)) == existing().get('createdBy', null))
         // Action-Based Pattern
         && (
           incoming().diff(existing()).affectedKeys().hasOnly([
@@ -192,24 +192,24 @@ service cloud.firestore {
 
       // Notes Subcollection
       match /notes/{noteId} {
-        allow list: if isSignedIn() && resource.data.authorId == request.auth.uid;
+        allow list: if isSignedIn() && resource.data.get('authorId', null) == request.auth.uid;
         allow get: if isValidId(noteId) && isNoteAuthor(resource.data);
         allow create: if isValidId(noteId) 
           && isValidNote(incoming())
-          && get(/databases/$(database)/documents/customers/$(customerId)).data.createdBy == request.auth.uid
+          && get(/databases/$(database)/documents/customers/$(customerId)).data.get('createdBy', null) == request.auth.uid
           && incoming().createdAt == request.time;
         allow update, delete: if isValidId(noteId) && isNoteAuthor(existing());
       }
 
       // Contacts Subcollection
       match /contacts/{contactId} {
-        allow list: if isSignedIn() && resource.data.authorId == request.auth.uid;
-        allow get: if isValidId(contactId) && isSignedIn() && resource.data.authorId == request.auth.uid;
+        allow list: if isSignedIn() && resource.data.get('authorId', null) == request.auth.uid;
+        allow get: if isValidId(contactId) && isSignedIn() && resource.data.get('authorId', null) == request.auth.uid;
         allow create: if isValidId(contactId)
           && isValidContact(incoming())
-          && get(/databases/$(database)/documents/customers/$(customerId)).data.createdBy == request.auth.uid
+          && get(/databases/$(database)/documents/customers/$(customerId)).data.get('createdBy', null) == request.auth.uid
           && incoming().at == request.time;
-        allow update, delete: if isValidId(contactId) && isSignedIn() && existing().authorId == request.auth.uid;
+        allow update, delete: if isValidId(contactId) && isSignedIn() && existing().get('authorId', null) == request.auth.uid;
       }
     }
   }

@@ -45,20 +45,21 @@ A mobile-first dealer CRM. Dealers sign in with Google, create customer profiles
 ### Other libs
 - `src/lib/imageNormalizer.ts` — pre-Gemini image processing.
 - `src/lib/dateNormalizer.ts` — `toISODate`. Tested.
+- `src/lib/templateRenderer.ts` — `renderTemplate(template, customer, modelYear)` for the Today-page text-template feature, plus `getDefaultModelYear()` (current year Jan–Aug, next year Sep–Dec). Pure function, deterministic substitution (NOT an AI call). Fully tested in `templateRenderer.test.ts`.
 - `src/lib/duplicateDetection.ts` — `findDuplicates`. Used by Bulk Intake to flag rows that match existing customers or earlier rows in the same batch. Returns `strong` / `weak` / `household` levels.
 - `src/lib/formSlots.ts` — `FORM_SLOTS` registry of PDF template filenames + labels. Used by Settings → Forms.
 - `src/lib/pdfFieldMappings.ts` — per-template field mappings (Customer property → PDF AcroForm field name).
 - `src/lib/timing.ts` — `timed(label, fn)` performance instrumentation helper.
 
 ### Components
-- `src/components/` — atomic UI primitives: `InputField`, `Toggle`, `StatusBadge`, `SaveStatusIndicator`, `MenuButton`, `SubButton`, `NavItem`, `NavIconButton`, `AIChatOverlay`, `RescheduleButton`, `TextedCheckbox`, `TradeEquityPanel`, `VinLookupButtons`, `EditableChip` (click-to-expand chip with popover, used for status + leadSourceType on profile and Bulk Intake rows).
+- `src/components/` — atomic UI primitives: `InputField`, `Toggle`, `StatusBadge`, `SaveStatusIndicator`, `MenuButton`, `SubButton`, `NavItem`, `NavIconButton`, `AIChatOverlay`, `RescheduleButton`, `TextedCheckbox`, `TradeEquityPanel`, `VinLookupButtons`, `EditableChip` (click-to-expand chip with popover, used for status + leadSourceType on profile and Bulk Intake rows), `CopyButton` (click-to-copy icon button with checkmark flash; used on the Today page for customer name + phone + rendered template text).
 
 ### Views
 - `src/views/LoginView.tsx` — Google sign-in screen.
 - `src/views/DashboardView.tsx` — customer list grid.
-- `src/views/TodayView.tsx` — reminder dashboard. Aggregates `getDueReminders(...)` across all customers. Each row has a `TextedCheckbox` (close reminders + roll cadence) and `RescheduleButton` (push the reminder to a specific date with a reason).
+- `src/views/TodayView.tsx` — reminder dashboard. Aggregates `getDueReminders(...)` across all customers. Each row has a `TextedCheckbox` (close reminders + roll cadence), a `RescheduleButton` (push to a specific date with a reason), and inline `CopyButton`s for customer name + phone. A template bar at the top accepts a dealer-pasted text template; when non-empty, each row renders a personalized preview via `renderTemplate` with a `CopyButton`. Template text and current model year persist in `localStorage` (`todayTemplate` + `latestModelYear`), NOT in Firestore.
 - `src/views/CustomerProfileView.tsx` — sticky header, the 6 form sections (composed from `src/views/profile/`), and the bottom action bar (App menu / AI menu / Insights menu / Customer menu).
-- `src/views/BulkIntakeView.tsx` — screenshot → AI extraction → review/edit table → batch commit. Per-row Vehicle of Interest + Trade-In sub-cards, per-row + bulk-set Follow-Up date, paste support (Ctrl+V / ⌘V), duplicate flagging, lead source chip, pending-interest banner.
+- `src/views/BulkIntakeView.tsx` — screenshot(s) → AI extraction → review/edit table → batch commit. Accepts **up to 8 images per batch** (drag, browse, or paste — multiple at once). Thumbnails shown in a grid in the right column with per-image remove buttons. Each image fires its own `extractBulkCustomers` call; calls run in parallel via `Promise.allSettled` so a single failure doesn't kill the batch (failed image gets a red "Failed" thumbnail badge). Per-row Vehicle of Interest + Trade-In sub-cards, per-row + bulk-set Follow-Up date, duplicate flagging (works across images via the same `findDuplicates` logic), lead source chip, pending-interest banner.
 - `src/views/SettingsView.tsx` — Settings screen.
 - `src/views/profile/*Section.tsx` — one file per form card: `CustomerInfoSection`, `InsuranceSection`, `NewVehicleSection`, `TradeInSection`, `GoalsSection`, `TimelineNotesSection`. Each takes `{ customer, onChange }` (`TimelineNotesSection` also takes `notes`/`newNote`/`onAddNote`/`onReschedule` props — the last drives the inline cadence edit and the Add Custom Follow-Up button; `TradeInSection` takes valuation props).
 - `src/views/settings/FormsManagerSection.tsx` — upload / replace / delete blank PDF templates.
@@ -116,7 +117,7 @@ HTML `<input type="date">` only displays values formatted as YYYY-MM-DD. The AI 
 - Manual reminders live as an array on the customer doc (`manualReminders: { date, reason }[]`, rule-capped at 50 entries).
 
 ### Bulk Intake (`src/views/BulkIntakeView.tsx` + `src/services/bulkIntakeService.ts`)
-- Drag-drop, upload, OR paste (Ctrl+V / ⌘V) a screenshot. Gemini extracts multiple customers in one call.
+- Drag-drop, upload, OR paste (Ctrl+V / ⌘V) **up to 8 screenshots per batch** (cap is `MAX_IMAGES` in `BulkIntakeView.tsx`). Each image fires its own Gemini call via `extractBulkCustomers`; all calls run in parallel via `Promise.allSettled` and results are merged into one review list. A single failure surfaces as a "Failed" thumbnail badge but doesn't block the other images.
 - Source-CRM tags are recognized: `(New)` / `(Used)` → `vehicleXxx`; `(Trade-In)` → `tradeXxx` + `hasTradeIn=true`. Multiple "interest" vehicles: first wins for `vehicleXxx`, the rest concatenated into `pendingInterestNotes` for the dealer to handle manually.
 - Lead metadata captured per row: `leadSource`, `leadGeneratedDate` (ISO-normalized).
 - Each row gets a follow-up date (default = today + 30 days, chip presets 3d/7d/14d/30d, bulk-set bar at top).
@@ -133,6 +134,15 @@ HTML `<input type="date">` only displays values formatted as YYYY-MM-DD. The AI 
 - Bulk Intake commit branches on row status: if `status === 'sold'`, applies the full Sold flow (stamp `purchaseDate`, roll buyer cadence via `rollNextCadence('buyer')`, override followUpDate to today, stamp `lastContactedAt = today`). Otherwise the lead path: `nextCadenceDue = row.followUpDate` (smart-computed; see next bullet), `lastContactedAt = row.lastActionDate` when the AI extracted a Note/Text last action, otherwise today.
 - **Bulk Intake cadence from "Last Action"**: `bulkIntakeService` extracts transient `lastActionType` (`'note' | 'text' | 'task'`) and `lastActionDate` from the source CRM's Last Action column. These do NOT live on the Customer doc — they're returned via the `BulkExtractedRow` wrapper type and consumed in `BulkIntakeView`. The helper `followUpFromAction` sets the row's `followUpDate`: Note/Text > 30 days ago → today (overdue); Note/Text within 30 days → action date + 30; everything else (Task, missing) → today + 30 (default).
 - The chip UI is implemented by `src/components/EditableChip.tsx` — generic over the option string type, supports a `color` (blue/emerald/gray/amber), `placeholder` (when value is undefined), and optional `allowClear` (adds a "— None —" entry).
+
+### Today page text templates
+
+- The Today page has a deterministic text-template feature: dealer pastes a template with `[placeholder]` tokens, each customer row renders a personalized preview, dealer copies and texts via their CRM.
+- Renderer lives in `src/lib/templateRenderer.ts`. **Deterministic, not AI** — pure string substitution. Six supported placeholders: `[name]`, `[trade model]`, `[trade year]`, `[vehicle model]`, `[vehicle year]`, `[latest model year]`. Matching is case-insensitive and tolerates whitespace inside brackets (`[Name]`, `[ name ]`, `[NAME]` all match).
+- Fallback rules: `[vehicle model]` falls back to `tradeModel` if `vehicleModel` is missing ("newer version of what they drive"). `[vehicle year]` falls back to the dealer's current-model-year setting. `[latest model year]` always uses the setting, ignoring customer data. Missing data leaves the literal placeholder visible (`[trade model]` stays in the rendered text) so the dealer sees gaps before sending.
+- Current model year setting: stored in `localStorage` under `latestModelYear`. Auto-suggested initial value via `getDefaultModelYear()`: current calendar year for months Jan–Aug, next year for Sep–Dec. Dealer can override anytime; setting persists per-device, NOT synced to Firestore.
+- Template text also persists per-device via `localStorage` under `todayTemplate`. Debounced 500ms write on change.
+- The Today row also shows inline `CopyButton`s for the customer name and phone. These render regardless of whether a template is active.
 
 ## Do not touch
 

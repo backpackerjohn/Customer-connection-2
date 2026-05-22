@@ -81,7 +81,7 @@ const SOURCE_CHIP_OPTIONS = [
 interface Props {
   customers: Customer[];
   user: User;
-  onComplete: () => void;
+  onComplete: (destination?: 'today' | 'dashboard') => void;
 }
 
 interface BatchRow {
@@ -94,10 +94,17 @@ interface BatchRow {
   lastActionDate?: string;    // ISO YYYY-MM-DD; transient from "Last Action" column in source CRM
 }
 
+interface SelectedImage {
+  file: File;
+  preview: string;       // data URL for thumbnail rendering
+  error?: string;        // set after a failed extraction so the thumbnail can show a badge
+}
+
+const MAX_IMAGES = 8;
+
 export function BulkIntakeView({ customers, user, onComplete }: Props) {
   const [dragActive, setDragActive] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [images, setImages] = useState<SelectedImage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [rows, setRows] = useState<BatchRow[]>([]);
   const [batchProcessed, setBatchProcessed] = useState(false);
@@ -105,35 +112,57 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
   const [processError, setProcessError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = (file: File) => {
-    setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+  const addFiles = (files: File[]) => {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+
+    const remaining = MAX_IMAGES - images.length;
+    if (remaining <= 0) {
+      setProcessError(`Limit is ${MAX_IMAGES} images per batch. Remove one before adding more.`);
+      return;
+    }
+
+    const toAdd = imageFiles.slice(0, remaining);
+    if (imageFiles.length > remaining) {
+      setProcessError(`Only the first ${remaining} of ${imageFiles.length} added — limit is ${MAX_IMAGES} per batch.`);
+    }
+
+    Promise.all(
+      toAdd.map(file => new Promise<SelectedImage>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve({ file, preview: reader.result as string });
+        reader.readAsDataURL(file);
+      }))
+    ).then(newImages => {
+      setImages(prev => [...prev, ...newImages]);
+    });
+  };
+
+  const removeImage = (idx: number) => {
+    setImages(prev => prev.filter((_, i) => i !== idx));
   };
 
   useEffect(() => {
-    if (batchProcessed) return;  // disable paste once review is showing
+    if (batchProcessed || isProcessing) return;
     const onPaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
       if (!items) return;
+      const pasted: File[] = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         if (item.kind === 'file' && item.type.startsWith('image/')) {
           const file = item.getAsFile();
-          if (file) {
-            e.preventDefault();
-            handleFileSelect(file);
-            return;
-          }
+          if (file) pasted.push(file);
         }
+      }
+      if (pasted.length > 0) {
+        e.preventDefault();
+        addFiles(pasted);
       }
     };
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
-  }, [batchProcessed]);
+  }, [batchProcessed, isProcessing, images.length]);
 
   // 1. Drag and Drop handlers
   const handleDrag = (e: DragEvent<HTMLDivElement>) => {
@@ -151,60 +180,78 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
     e.stopPropagation();
     setDragActive(false);
 
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.type.startsWith('image/')) {
-        handleFileSelect(file);
-      }
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      addFiles(Array.from(e.dataTransfer.files));
     }
   };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFileSelect(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      addFiles(Array.from(e.target.files));
     }
+    // Reset the input so the user can re-select the same file if removed and re-added.
+    e.target.value = '';
   };
 
-  const clearFile = () => {
-    setSelectedFile(null);
-    setImagePreview(null);
+  const clearAll = () => {
+    setImages([]);
     setRows([]);
     setBatchProcessed(false);
     setProcessError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // 2. Extractor Call
-  const processImage = async () => {
-    if (!selectedFile) return;
+  // 2. Extractor Call — parallel across all selected images
+  const processImages = async () => {
+    if (images.length === 0 || isProcessing) return;
     setIsProcessing(true);
     setProcessError(null);
     setRows([]);
 
     try {
-      // Convert file to base64
-      const reader = new FileReader();
-      const base64Promise = new Promise<{ data: string; mimeType: string }>((resolve, reject) => {
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          const mimeType = result.split(';')[0].split(':')[1];
-          const data = result.split(',')[1];
-          resolve({ data, mimeType });
-        };
-        reader.onerror = reject;
-      });
-      reader.readAsDataURL(selectedFile);
-      const imageData = await base64Promise;
+      // Run all images in parallel via allSettled so one failure doesn't kill the batch.
+      const results = await Promise.allSettled(
+        images.map(async (img) => {
+          const imageData = await new Promise<{ data: string; mimeType: string }>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const result = reader.result as string;
+              const mimeType = result.split(';')[0].split(':')[1];
+              const data = result.split(',')[1];
+              resolve({ data, mimeType });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(img.file);
+          });
+          return extractBulkCustomers({ inlineData: imageData });
+        })
+      );
 
-      const extracted = await extractBulkCustomers({ inlineData: imageData });
+      // Stamp per-image error status so failed thumbnails can show a badge.
+      setImages(prev => prev.map((img, i) => {
+        const r = results[i];
+        if (r && r.status === 'rejected') {
+          return { ...img, error: r.reason instanceof Error ? r.reason.message : 'Extraction failed' };
+        }
+        return { ...img, error: undefined };
+      }));
 
-      if (extracted.length === 0) {
-        setProcessError("No customers were detected in this screenshot. Try a clearer image, or one that shows multiple customer rows.");
+      // Flatten successful results into one merged extraction array.
+      const allExtracted = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+      const failedCount = results.filter(r => r.status === 'rejected').length;
+
+      if (allExtracted.length === 0) {
+        const msg = failedCount > 0
+          ? `Could not extract customers — all ${failedCount} image(s) failed. Check console for details.`
+          : 'No customers were detected in these screenshots. Try clearer images.';
+        setProcessError(msg);
         return;
       }
 
-      // Construct Initial Rows
-      const initialRows: BatchRow[] = extracted.map((extractedCust, index) => {
+      // Construct rows from the merged extraction. Cross-image dedup works
+      // naturally because findDuplicates compares each row against existing
+      // DB customers + earlier rows already in this batch.
+      const initialRows: BatchRow[] = allExtracted.map((extractedCust, index) => {
         const { lastActionType, lastActionDate, ...customerFields } = extractedCust;
         const derivedSourceType = customerFields.leadSourceType ?? deriveLeadSourceType(customerFields.leadSource);
         const rowCust = {
@@ -214,9 +261,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
           ...(derivedSourceType ? { leadSourceType: derivedSourceType } : {})
         };
 
-        // Pre-evaluate duplicates against already existing DB customers and prior rows inside batch
-        // to determine default action.
-        const priorRows = extracted.slice(0, index) as Customer[];
+        const priorRows = allExtracted.slice(0, index) as Customer[];
         const matchCandidates = [...customers, ...priorRows];
         const dups = findDuplicates(rowCust, matchCandidates);
         const hasStrong = dups.some(d => d.level === 'strong');
@@ -233,10 +278,14 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
 
       setRows(initialRows);
       setBatchProcessed(true);
+
+      if (failedCount > 0) {
+        setProcessError(`${failedCount} of ${images.length} image(s) couldn't be processed; the others were extracted successfully.`);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      setProcessError(`Could not extract customers from the image. ${msg}`);
-      console.error("Failed to parse image with Gemini:", err);
+      setProcessError(`Could not extract customers. ${msg}`);
+      console.error("Failed to parse images with Gemini:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -351,7 +400,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
       {/* Header */}
       <header className="flex items-center gap-4">
         <button 
-          onClick={onComplete}
+          onClick={() => onComplete('dashboard')}
           className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft size={20} />
@@ -399,6 +448,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
               id="bulk-file-upload" 
               className="hidden" 
               accept="image/*"
+              multiple
               onChange={onFileChange}
             />
 
@@ -418,49 +468,61 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                     browse files
                   </button>
                 </p>
-                <p className="text-xs text-gray-400/80">Supports PNG, JPG, JPEG. Digital screenshot text ONLY.</p>
-                <p className="text-xs text-gray-400/80">Tip: paste a screenshot directly with Ctrl+V / ⌘V.</p>
+                <p className="text-xs text-gray-400/80">Supports PNG, JPG, JPEG. Up to {MAX_IMAGES} images per batch.</p>
+                <p className="text-xs text-gray-400/80">Tip: paste screenshots directly with Ctrl+V / ⌘V (multiple OK).</p>
               </div>
             </div>
           </div>
 
-          {/* Right Image Preview and Run button */}
+          {/* Right Image Preview (thumbnail grid) and Run button */}
           <div className="card p-6 min-h-[16rem] flex flex-col justify-between space-y-4">
-            <h3 className="font-bold text-lg text-gray-900">Selection Preview</h3>
-            {imagePreview ? (
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg text-gray-900">Selection Preview</h3>
+              {images.length > 0 && (
+                <span className="text-xs text-gray-500 font-medium">{images.length} of {MAX_IMAGES}</span>
+              )}
+            </div>
+            {images.length > 0 ? (
               <div className="space-y-4 flex-1 flex flex-col justify-between">
-                <div className="relative rounded-xl overflow-hidden border border-gray-100 max-h-60 bg-gray-50 flex items-center justify-center">
-                  <img 
-                    src={imagePreview} 
-                    alt="Upload Preview" 
-                    className="max-h-60 object-contain"
-                    referrerPolicy="no-referrer"
-                  />
-                  <button 
-                    onClick={clearFile}
-                    className="absolute top-2 right-2 p-2 bg-white/90 backdrop-blur hover:bg-white text-red-600 rounded-full shadow-sm hover:scale-105 transition-all"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-                <div className="flex items-center justify-between text-xs text-gray-500 pt-2">
-                  <span>File: {selectedFile?.name}</span>
-                  <span>Size: {((selectedFile?.size || 0) / 1024).toFixed(1)} KB</span>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {images.map((img, idx) => (
+                    <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-gray-100 bg-gray-50 group">
+                      <img 
+                        src={img.preview} 
+                        alt={`Screenshot ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                      <button 
+                        onClick={() => removeImage(idx)}
+                        disabled={isProcessing}
+                        className="absolute top-1 right-1 p-1 bg-white/90 backdrop-blur hover:bg-white text-red-600 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-30"
+                        aria-label="Remove image"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                      {img.error && (
+                        <div className="absolute bottom-1 left-1 right-1 bg-rose-600 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded text-center">
+                          Failed
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
                 <button
-                  onClick={processImage}
+                  onClick={processImages}
                   disabled={isProcessing}
                   className="w-full bg-gray-900 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-gray-800 disabled:opacity-50 transition-all shadow-sm active:scale-95"
                 >
                   {isProcessing ? (
                     <>
                       <Loader2 size={18} className="animate-spin" />
-                      <span>Extracting Contacts...</span>
+                      <span>Extracting from {images.length} list{images.length === 1 ? '' : 's'}…</span>
                     </>
                   ) : (
                     <>
                       <Sparkles size={18} className="text-amber-400 fill-amber-400" />
-                      <span>Process List with Gemini</span>
+                      <span>Process {images.length} List{images.length === 1 ? '' : 's'} with Gemini</span>
                     </>
                   )}
                 </button>
@@ -468,7 +530,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-gray-400 py-10">
                 <HelpCircle size={36} className="text-gray-200 stroke-[1.5] mb-2" />
-                <p className="text-sm">Select or drag an image first.</p>
+                <p className="text-sm">Select, drag, or paste up to {MAX_IMAGES} images.</p>
               </div>
             )}
           </div>
@@ -490,7 +552,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
             
             <div className="flex items-center gap-2">
               <button 
-                onClick={clearFile}
+                onClick={clearAll}
                 disabled={isCommitting}
                 className="px-4 py-2 text-sm font-semibold border border-gray-200 bg-white hover:bg-gray-50 rounded-lg transition-all disabled:opacity-50"
               >
@@ -519,7 +581,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
           <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-xl border border-gray-100">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Set follow-up for all</span>
             <div className="flex items-center gap-1">
-              {[3, 7, 14, 30].map(d => (
+              {[0, 3, 7, 14, 30].map(d => (
                 <button
                   key={d}
                   type="button"
@@ -527,7 +589,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                   disabled={isCommitting || hasCommitted}
                   className="text-xs font-semibold px-2.5 py-1 rounded-md border bg-white text-gray-700 border-gray-200 hover:bg-gray-50 transition-all"
                 >
-                  {d}d
+                  {d === 0 ? 'Today' : `${d}d`}
                 </button>
               ))}
               <input
@@ -557,10 +619,14 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                 </div>
               </div>
               <button 
-                onClick={onComplete}
+                onClick={() => {
+                  const todayISO = addDaysISO(0);
+                  const hasTodayFollowUp = rows.some(r => r.status === 'success' && r.followUpDate === todayISO);
+                  onComplete(hasTodayFollowUp ? 'today' : 'dashboard');
+                }}
                 className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 rounded-lg shadow-sm transition-all shadow-emerald-500/10 active:scale-95"
               >
-                Return to Dashboard
+                {rows.some(r => r.status === 'success' && r.followUpDate === addDaysISO(0)) ? 'Go to Today' : 'Return to Dashboard'}
               </button>
             </div>
           )}
@@ -853,7 +919,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                         <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Follow-Up Reminder</label>
                         <div className="flex items-center gap-1">
-                          {[3, 7, 14, 30].map(d => (
+                          {[0, 3, 7, 14, 30].map(d => (
                             <button
                               key={d}
                               type="button"
@@ -865,7 +931,7 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                                   : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                               }`}
                             >
-                              {d}d
+                              {d === 0 ? 'Today' : `${d}d`}
                             </button>
                           ))}
                           <input

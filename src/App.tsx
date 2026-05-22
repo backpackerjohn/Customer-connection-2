@@ -611,7 +611,7 @@ export default function App() {
             <BulkIntakeView 
               customers={customers}
               user={user}
-              onComplete={() => setView('dashboard')}
+              onComplete={(dest) => setView(dest === 'today' ? 'today' : 'dashboard')}
             />
           </motion.div>
         )}

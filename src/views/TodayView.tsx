@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bell } from 'lucide-react';
 import { Customer } from '../types';
 import { getDueReminders, ReminderKind } from '../lib/reminders/engine';
 import { REMINDER_CONFIG } from '../lib/reminders/config';
 import { TextedCheckbox } from '../components/TextedCheckbox';
 import { RescheduleButton } from '../components/RescheduleButton';
+import { CopyButton } from '../components/CopyButton';
+import { renderTemplate, getDefaultModelYear } from '../lib/templateRenderer';
 
 interface Props {
   customers: Customer[];
@@ -23,6 +25,27 @@ const REASON_LABELS: Record<ReminderKind, string> = {
 };
 
 export function TodayView({ customers, onTexted, onReschedule }: Props) {
+  const [template, setTemplate] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return localStorage.getItem('todayTemplate') ?? '';
+  });
+
+  const [modelYear, setModelYear] = useState<string>(() => {
+    if (typeof window === 'undefined') return getDefaultModelYear();
+    return localStorage.getItem('latestModelYear') ?? getDefaultModelYear();
+  });
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      localStorage.setItem('todayTemplate', template);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [template]);
+
+  useEffect(() => {
+    if (modelYear) localStorage.setItem('latestModelYear', modelYear);
+  }, [modelYear]);
+
   const today = new Date();
 
   const entries = customers
@@ -58,6 +81,40 @@ export function TodayView({ customers, onTexted, onReschedule }: Props) {
         </p>
       </header>
 
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-xs space-y-3">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Text Template</h3>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-500 font-medium">Current model year:</label>
+            <input
+              type="number"
+              value={modelYear}
+              onChange={(e) => setModelYear(e.target.value)}
+              min={2000}
+              max={2100}
+              step={1}
+              className="w-20 text-sm border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-gray-400"
+            />
+          </div>
+        </div>
+        <textarea
+          value={template}
+          onChange={(e) => setTemplate(e.target.value)}
+          placeholder="Paste a template. Use [name], [trade model], [trade year], [vehicle model], [vehicle year], or [latest model year]."
+          rows={3}
+          className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:border-gray-400 resize-y"
+        />
+        <p className="text-xs text-gray-400">
+          Placeholders:{' '}
+          <code className="bg-gray-50 px-1 py-0.5 rounded">[name]</code>{' '}
+          <code className="bg-gray-50 px-1 py-0.5 rounded">[trade model]</code>{' '}
+          <code className="bg-gray-50 px-1 py-0.5 rounded">[trade year]</code>{' '}
+          <code className="bg-gray-50 px-1 py-0.5 rounded">[vehicle model]</code>{' '}
+          <code className="bg-gray-50 px-1 py-0.5 rounded">[vehicle year]</code>{' '}
+          <code className="bg-gray-50 px-1 py-0.5 rounded">[latest model year]</code>
+        </p>
+      </div>
+
       {entries.length === 0 ? (
         <div className="py-20 text-center space-y-4 max-w-sm mx-auto">
           <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto shadow-xs border border-gray-100">
@@ -90,16 +147,22 @@ export function TodayView({ customers, onTexted, onReschedule }: Props) {
             const isOverdue = primaryReminder.isOverdue;
             const overdueText = getDaysOverdueText(primaryReminder.dueDate);
 
+            const personalizedText = template.trim()
+              ? renderTemplate(template, customer, modelYear)
+              : '';
+
             return (
               <div 
                 key={customer.id} 
-                className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-neutral-50/50 transition-colors"
+                className="p-5 hover:bg-neutral-50/50 transition-colors"
               >
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1.5 min-w-0">
                   <div className="flex items-center gap-3 flex-wrap">
                     <h3 className="font-bold text-lg text-gray-900 truncate">
                       {customer.firstName} {customer.middleInitial ? customer.middleInitial + ' ' : ''}{customer.lastName}
                     </h3>
+                    <CopyButton value={`${customer.firstName} ${customer.lastName}`.trim()} />
                     
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">
                       {formattedReasons}
@@ -112,8 +175,13 @@ export function TodayView({ customers, onTexted, onReschedule }: Props) {
                     )}
                   </div>
 
-                  <div className="text-sm text-gray-500 flex flex-wrap gap-x-4 gap-y-1 font-medium">
-                    {customer.phone && <span>{customer.phone}</span>}
+                  <div className="text-sm text-gray-500 flex flex-wrap gap-x-3 gap-y-1 font-medium items-center">
+                    {customer.phone && (
+                      <span className="flex items-center gap-1">
+                        {customer.phone}
+                        <CopyButton value={customer.phone} />
+                      </span>
+                    )}
                     {customer.email && <span>{customer.email}</span>}
                     {primaryReminder.labels.filter(lbl => !holidayLabels.includes(lbl)).length > 0 && (
                       <span className="text-neutral-400 italic">
@@ -136,6 +204,19 @@ export function TodayView({ customers, onTexted, onReschedule }: Props) {
                     />
                   </div>
                 </div>
+                </div>
+                {personalizedText && (
+                  <div className="mt-3 bg-gray-50 border border-gray-100 rounded-lg p-3 flex items-start justify-between gap-3">
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap flex-1">
+                      {personalizedText}
+                    </p>
+                    <CopyButton 
+                      value={personalizedText} 
+                      label="Copy" 
+                      className="bg-white border border-gray-200 shrink-0"
+                    />
+                  </div>
+                )}
               </div>
             );
           })}

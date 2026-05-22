@@ -443,16 +443,23 @@ describe('Reminders Engine', () => {
     expect(reminders[0].labels).toContain('Memorial Day');
   });
 
-  it("Cadence due today + Memorial Day 5 days away -> NOT shown today (cadence absorbed forward)", () => {
+  it("Cadence due today + Memorial Day 5 days away -> shown today, anchored on cadence (holiday combined into reasons/labels)", () => {
     // Today 2026-05-20, cadence due today, Memorial Day in 5 days. They combine
-    // (5 days apart), holiday wins as anchor, anchor is in the future, dropped from today.
+    // (5 days apart). A future holiday cannot push the anchor past today when
+    // there's a cadence due today — the card surfaces today with cadence as
+    // the anchor and Memorial Day joins as a secondary label.
     const today = new Date('2026-05-20T12:00:00Z');
     const customer: Customer = {
       ...baseCustomer,
       nextCadenceDue: '2026-05-20'
     };
     const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
-    expect(reminders.length).toBe(0);
+    expect(reminders.length).toBe(1);
+    expect(reminders[0].dueDate).toBe('2026-05-20');
+    expect(reminders[0].reasons).toContain('cadence');
+    expect(reminders[0].reasons).toContain('holiday');
+    expect(reminders[0].labels).toContain('Memorial Day');
+    expect(reminders[0].isOverdue).toBe(false);
   });
 
   it("Cadence absorbed forward by holiday -> resurfaces as a combined card on the holiday's day", () => {

@@ -360,7 +360,14 @@ export default function App() {
       const bytes = await buildSoldPacket(currentCustomer);
       downloadPdfBytes(bytes, soldPacketFilename(currentCustomer));
 
-      if (!currentCustomer.purchaseDate) {
+      // Run the full Sold-flow patch (stamp purchaseDate to now, roll buyer
+      // cadence, flip status='sold') whenever the customer is NOT already
+      // marked sold. This re-stamps purchaseDate even if it was previously
+      // populated (e.g. AI-extracted or manually typed) — clicking Sold
+      // means "they're buying NOW", so today's date is the correct value.
+      // Re-clicking Sold on an already-sold customer is idempotent: only
+      // the PDF regenerates.
+      if (currentCustomer.status !== 'sold') {
         try {
           const todayISO = new Date().toISOString();
           // Roll a buyer-mode cadence (3–6 months out) at sale time so

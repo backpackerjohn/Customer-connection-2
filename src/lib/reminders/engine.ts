@@ -282,14 +282,22 @@ export function getDueReminders(customer: Customer, today: Date, config: Reminde
   // future — Today's view is strictly today or overdue.
   const result: DueReminder[] = [];
   for (const group of groups) {
-    const sorted = [...group].sort((a, b) => {
+    // Only items due today or overdue are eligible to anchor the card on
+    // today's view. Future items (e.g. a holiday later this week) still
+    // contribute to reasons/labels via the grouping above, but cannot push
+    // the anchor date into the future and hide a cadence/manual reminder
+    // that's due today. If every member is in the future, the group is
+    // dropped and resurfaces when the soonest item arrives.
+    const eligibleForAnchor = group.filter(item => item.dueDate <= todayStr);
+
+    if (eligibleForAnchor.length === 0) continue;
+
+    const sorted = [...eligibleForAnchor].sort((a, b) => {
       const wDiff = REMINDER_WEIGHT[a.reason] - REMINDER_WEIGHT[b.reason];
       if (wDiff !== 0) return wDiff;
       return a.dueDate.localeCompare(b.dueDate);
     });
     const anchorDate = sorted[0].dueDate;
-
-    if (anchorDate > todayStr) continue;
 
     const reasonsSet = new Set<ReminderKind>();
     for (const item of group) reasonsSet.add(item.reason);

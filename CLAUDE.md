@@ -57,7 +57,7 @@ A mobile-first dealer CRM. Dealers sign in with Google, create customer profiles
 ### Views
 - `src/views/LoginView.tsx` — Google sign-in screen.
 - `src/views/DashboardView.tsx` — customer list grid.
-- `src/views/TodayView.tsx` — reminder dashboard. Aggregates `getDueReminders(...)` across all customers. Each row has a `TextedCheckbox` (close reminders + roll cadence), a `RescheduleButton` (push to a specific date with a reason), and inline `CopyButton`s for customer name + phone. A template bar at the top accepts a dealer-pasted text template; when non-empty, each row renders a personalized preview via `renderTemplate` with a `CopyButton`. Template text and current model year persist in `localStorage` (`todayTemplate` + `latestModelYear`), NOT in Firestore.
+- `src/views/TodayView.tsx` — reminder dashboard. Aggregates `getDueReminders(...)` across all customers. Each row has a `TextedCheckbox` (close reminders + roll cadence), a `RescheduleButton` (push to a specific date with a reason), and inline `CopyButton`s for customer name + phone. A template bar at the top accepts a dealer-pasted text template; when non-empty, each row renders a personalized preview via `renderTemplate` with a `CopyButton`. Template text and current model year persist in `localStorage` (`todayTemplate` + `latestModelYear`), NOT in Firestore. Each row also has an inline expandable Notes panel — a collapsed "Notes" strip below the row that, when clicked, opens an inline panel mirroring the profile's `TimelineNotesSection` (add-note input + scrollable notes feed). Only one row is expanded at a time; a single `subscribeToNotes` listener is active for the expanded customer, torn down on collapse.
 - `src/views/CustomerProfileView.tsx` — sticky header, the 6 form sections (composed from `src/views/profile/`), and the bottom action bar (App menu / AI menu / Insights menu / Customer menu).
 - `src/views/BulkIntakeView.tsx` — screenshot(s) → AI extraction → review/edit table → batch commit. Accepts **up to 8 images per batch** (drag, browse, or paste — multiple at once). Thumbnails shown in a grid in the right column with per-image remove buttons. Each image fires its own `extractBulkCustomers` call; calls run in parallel via `Promise.allSettled` so a single failure doesn't kill the batch (failed image gets a red "Failed" thumbnail badge). Per-row Vehicle of Interest + Trade-In sub-cards, per-row + bulk-set Follow-Up date, duplicate flagging (works across images via the same `findDuplicates` logic), lead source chip, pending-interest banner.
 - `src/views/SettingsView.tsx` — Settings screen.
@@ -144,6 +144,14 @@ HTML `<input type="date">` only displays values formatted as YYYY-MM-DD. The AI 
 - Template text also persists per-device via `localStorage` under `todayTemplate`. Debounced 500ms write on change.
 - The Today row also shows inline `CopyButton`s for the customer name and phone. These render regardless of whether a template is active.
 
+### Today page inline Notes panel
+
+- Each Today row has a collapsible inline Notes panel. State lives in `TodayView`: `expandedCustomerId` (single-open), `expandedNotes`, `newNoteText`.
+- Subscription model: at most ONE Firestore listener active at any time. The `useEffect` on `[expandedCustomerId, user]` calls `subscribeToNotes(expandedCustomerId, user.uid, setExpandedNotes, ...)` and returns the unsubscribe. No per-row preloading — collapsed rows show only "Notes" with no count.
+- Adding a note goes through `App.tsx`'s `handleAddNoteForCustomer(customerId, content)`, which calls `createNote(customerId, { content, type: 'manual', authorId: user.uid })`. This is intentionally a SEPARATE handler from the profile-page `handleAddNote` — do not collapse them; the profile handler closes over `<currentCustomer.id>` and would mis-target.
+- The TodayView panel visually mirrors `TimelineNotesSection.tsx`'s add-note row and notes feed (same Tailwind classes, same AI Discovery / Manual Entry badge logic, same date formatting). Cross-view sync is free because both call `subscribeToNotes` with the same `(customerId, authorId)` scope.
+- No animations on expand/collapse — plain conditional render.
+
 ## Do not touch
 
 - **Unwired placeholder sub-buttons** in `src/views/CustomerProfileView.tsx` bottom action bar:
@@ -169,6 +177,7 @@ HTML `<input type="date">` only displays values formatted as YYYY-MM-DD. The AI 
 - `noUnusedLocals` is on. If you add a destructured variable you don't use, prefix with underscore or destructure differently — don't add `eslint-disable` unless there's a real reason (`id` strip in `customersService` and the `hasAnyData` destructure in `App.tsx` are the canonical examples).
 - Auto-save's effect dependency array includes `pendingAINotes` and `pendingImages`. Buffering either one resets the 2s debounce. This is acceptable.
 - Rules tests 6 and 7 fail not because of a rule bug but because newer Firebase client SDKs reject oversized doc IDs and 1MB strings with `INVALID_ARGUMENT` BEFORE the rule even runs. The assertions expect `PERMISSION_DENIED`. Leave them alone unless explicitly fixing.
+- There are now TWO add-note paths in `App.tsx`: `handleAddNote` (profile view; closes over `<currentCustomer.id>`) and `handleAddNoteForCustomer(customerId, content)` (Today view; takes the id as an arg). Do not consolidate them — the profile handler depends on `currentCustomer` state that is not populated when the dealer is on the Today page. Likewise, the Today view manages its own `expandedNotes` state and subscription independently from the profile's `notes` state.
 
 ## Running
 

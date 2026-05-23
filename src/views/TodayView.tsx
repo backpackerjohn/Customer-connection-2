@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Bell } from 'lucide-react';
-import { Customer } from '../types';
+import { Bell, MessageSquare, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { User } from 'firebase/auth';
+import { Customer, Note } from '../types';
 import { getDueReminders, ReminderKind } from '../lib/reminders/engine';
 import { REMINDER_CONFIG } from '../lib/reminders/config';
 import { TextedCheckbox } from '../components/TextedCheckbox';
 import { RescheduleButton } from '../components/RescheduleButton';
 import { CopyButton } from '../components/CopyButton';
 import { renderTemplate, getDefaultModelYear } from '../lib/templateRenderer';
+import { subscribeToNotes } from '../services/notesService';
+import { handleFirestoreError, OperationType } from '../lib/firebase';
 
 interface Props {
   customers: Customer[];
   onTexted: (customerId: string, when: Date, closedKinds: ReminderKind[]) => void;
   onReschedule: (customerId: string, date: string, reason: string) => void;
+  user: User | null;
+  onAddNote: (customerId: string, content: string) => Promise<void>;
 }
 
 const REASON_LABELS: Record<ReminderKind, string> = {
@@ -24,7 +29,7 @@ const REASON_LABELS: Record<ReminderKind, string> = {
   holiday: 'Holiday',
 };
 
-export function TodayView({ customers, onTexted, onReschedule }: Props) {
+export function TodayView({ customers, onTexted, onReschedule, user, onAddNote }: Props) {
   const [template, setTemplate] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
     return localStorage.getItem('todayTemplate') ?? '';
@@ -34,6 +39,10 @@ export function TodayView({ customers, onTexted, onReschedule }: Props) {
     if (typeof window === 'undefined') return getDefaultModelYear();
     return localStorage.getItem('latestModelYear') ?? getDefaultModelYear();
   });
+
+  const [expandedCustomerId, setExpandedCustomerId] = useState<string | null>(null);
+  const [expandedNotes, setExpandedNotes] = useState<Note[]>([]);
+  const [newNoteText, setNewNoteText] = useState<string>('');
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -45,6 +54,32 @@ export function TodayView({ customers, onTexted, onReschedule }: Props) {
   useEffect(() => {
     if (modelYear) localStorage.setItem('latestModelYear', modelYear);
   }, [modelYear]);
+
+  useEffect(() => {
+    if (!expandedCustomerId || !user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setExpandedNotes([]);
+      return;
+    }
+    const unsubscribe = subscribeToNotes(
+      expandedCustomerId,
+      user.uid,
+      setExpandedNotes,
+      (err) => handleFirestoreError(err, OperationType.LIST, `customers/${expandedCustomerId}/notes`)
+    );
+    return () => unsubscribe();
+  }, [expandedCustomerId, user]);
+
+  const toggleExpand = (customerId: string) => {
+    setExpandedCustomerId(prev => prev === customerId ? null : customerId);
+    setNewNoteText('');
+  };
+
+  const handleAddNoteClick = async () => {
+    if (!expandedCustomerId || !newNoteText.trim()) return;
+    await onAddNote(expandedCustomerId, newNoteText.trim());
+    setNewNoteText('');
+  };
 
   const today = new Date();
 
@@ -215,6 +250,84 @@ export function TodayView({ customers, onTexted, onReschedule }: Props) {
                       label="Copy" 
                       className="bg-white border border-gray-200 shrink-0"
                     />
+                  </div>
+                )}
+
+                {expandedCustomerId !== customer.id ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(customer.id!)}
+                    className="mt-3 w-full flex items-center justify-between px-3 py-2 rounded-lg border border-gray-100 bg-white text-xs font-medium text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <MessageSquare size={14} className="text-gray-400" />
+                      Notes
+                    </span>
+                    <ChevronDown size={14} className="text-gray-400" />
+                  </button>
+                ) : (
+                  <div className="mt-3 border border-gray-100 rounded-xl bg-white overflow-hidden">
+                    {/* Collapse header */}
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(customer.id!)}
+                      className="w-full flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50/50 hover:bg-gray-50 text-xs font-medium text-gray-600 cursor-pointer transition-colors"
+                    >
+                      <span className="flex items-center gap-2">
+                        <MessageSquare size={14} className="text-gray-400" />
+                        Notes ({expandedNotes.length})
+                      </span>
+                      <ChevronUp size={14} className="text-gray-400" />
+                    </button>
+
+                    {/* Add-note input (mirrors TimelineNotesSection's add-note row exactly) */}
+                    <div className="p-4 bg-gray-50/50 border-b border-gray-100">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Add a discovery note..."
+                          className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-gray-900 outline-none transition-all"
+                          value={newNoteText}
+                          onChange={(e) => setNewNoteText(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddNoteClick()}
+                        />
+                        <button
+                          onClick={handleAddNoteClick}
+                          disabled={!newNoteText.trim()}
+                          className="bg-gray-900 text-white p-2 rounded-xl disabled:opacity-30 disabled:grayscale transition-all active:scale-95 cursor-pointer"
+                        >
+                          <Plus size={20} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Notes feed (mirrors TimelineNotesSection's notes feed exactly) */}
+                    <div className="divide-y divide-gray-50 flex flex-col max-h-[400px] overflow-y-auto">
+                      {expandedNotes.length === 0 ? (
+                        <div className="p-12 text-center text-gray-400 space-y-2">
+                          <MessageSquare size={24} className="mx-auto opacity-20" />
+                          <p className="text-xs font-medium uppercase tracking-widest">No notes yet</p>
+                        </div>
+                      ) : (
+                        expandedNotes.map((note) => (
+                          <div key={note.id} className="p-4 space-y-2 hover:bg-gray-50/50 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                                note.type === 'ai' ? 'text-indigo-500' : 'text-gray-400'
+                              }`}>
+                                {note.type === 'ai' ? 'Ai Discovery' : 'Manual Entry'}
+                              </span>
+                              <span className="text-[10px] text-gray-400">
+                                {note.createdAt?.seconds
+                                  ? new Date(note.createdAt.seconds * 1000).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+                                  : 'Pending...'}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-800 leading-relaxed">{note.content}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

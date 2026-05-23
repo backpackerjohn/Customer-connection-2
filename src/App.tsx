@@ -299,6 +299,19 @@ export default function App() {
     }
   };
 
+  const handleAddNoteForCustomer = async (customerId: string, content: string) => {
+    if (!user) return;
+    try {
+      await createNote(customerId, {
+        content,
+        type: 'manual',
+        authorId: user.uid
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `customers/${customerId}/notes`);
+    }
+  };
+
   const handleTestDrive = async () => {
     if (isGeneratingPacket) return;
     
@@ -562,6 +575,8 @@ export default function App() {
               customers={customers}
               onTexted={handleTexted}
               onReschedule={handleReschedule}
+              user={user}
+              onAddNote={handleAddNoteForCustomer}
             />
           </motion.div>
         )}

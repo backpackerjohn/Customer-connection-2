@@ -37,6 +37,7 @@ import { FORM_SLOTS } from './lib/formSlots';
 
 import { LoginView } from './views/LoginView';
 import { DashboardView } from './views/DashboardView';
+import { CustomersView } from './views/CustomersView';
 import { CustomerProfileView } from './views/CustomerProfileView';
 import { SettingsView } from './views/SettingsView';
 import { BulkIntakeView } from './views/BulkIntakeView';
@@ -45,7 +46,7 @@ import { TodayView } from './views/TodayView';
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'dashboard' | 'profile' | 'settings' | 'bulk-intake' | 'today'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'profile' | 'settings' | 'bulk-intake' | 'today' | 'customers'>('dashboard');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [currentCustomer, setCurrentCustomer] = useState<Customer>(emptyCustomer);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -524,7 +525,12 @@ export default function App() {
             active={view === 'today'} 
             onClick={() => setView('today')}
           />
-          <NavItem icon={<Users size={20} />} label="Customers" />
+          <NavItem 
+            icon={<Users size={20} />} 
+            label="Customers" 
+            active={view === 'customers'}
+            onClick={() => setView('customers')}
+          />
           <NavItem 
             icon={<Sparkles size={20} />} 
             label="Bulk Intake" 
@@ -558,6 +564,20 @@ export default function App() {
             exit={{ opacity: 0, y: -10 }}
           >
             <DashboardView 
+              customers={customers}
+              onNewCustomer={handleNewCustomer}
+              onEditCustomer={handleEditCustomer}
+            />
+          </motion.div>
+        )}
+        {view === 'customers' && (
+          <motion.div
+            key="customers"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <CustomersView 
               customers={customers}
               onNewCustomer={handleNewCustomer}
               onEditCustomer={handleEditCustomer}
@@ -647,7 +667,7 @@ export default function App() {
       />
 
       {/* Mobile Nav Bar - Only visible on Dashboard or if we want global nav */}
-      {(view === 'dashboard' || view === 'settings' || view === 'bulk-intake' || view === 'today') && (
+      {(view === 'dashboard' || view === 'settings' || view === 'bulk-intake' || view === 'today' || view === 'customers') && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-8 py-4 flex items-center justify-between z-40">
           <NavIconButton 
             icon={<LayoutDashboard size={24} />} 
@@ -658,6 +678,11 @@ export default function App() {
             icon={<Bell size={24} />} 
             active={view === 'today'} 
             onClick={() => setView('today')}
+          />
+          <NavIconButton 
+            icon={<Users size={24} />} 
+            active={view === 'customers'} 
+            onClick={() => setView('customers')}
           />
           <NavIconButton 
             icon={<Sparkles size={24} />} 

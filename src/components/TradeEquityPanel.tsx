@@ -34,6 +34,14 @@ function humanizeCondition(condition?: string): string {
 }
 
 export function TradeEquityPanel({ customer, onChange, onEstimate, isEstimating, valuationError }: Props) {
+  const [prevValuationError, setPrevValuationError] = React.useState<string | null>(valuationError);
+  const [dismissedError, setDismissedError] = React.useState<string | null>(null);
+
+  if (valuationError !== prevValuationError) {
+    setPrevValuationError(valuationError);
+    setDismissedError(null);
+  }
+
   const canEstimate = customer.tradeVin && customer.tradeMileage;
   const selectedCondition = customer.tradeValueCondition || 'good';
 
@@ -148,9 +156,22 @@ export function TradeEquityPanel({ customer, onChange, onEstimate, isEstimating,
         )}
       </button>
 
-      {valuationError && (
-        <div className="text-center">
-          <span className="text-xs text-red-500 font-bold">{valuationError}</span>
+      {valuationError && valuationError !== dismissedError && (
+        <div className="bg-red-50/80 border border-red-200/60 rounded-xl p-3 text-red-700 relative text-left">
+          <button 
+            type="button"
+            onClick={() => setDismissedError(valuationError)}
+            className="absolute top-2.5 right-2.5 text-red-400 hover:text-red-700 transition-colors p-1 rounded-md"
+            title="Dismiss error"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+          <p className="text-xs font-semibold pr-7 leading-relaxed">
+            {valuationError}
+          </p>
         </div>
       )}
 

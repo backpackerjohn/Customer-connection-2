@@ -11,7 +11,7 @@ interface Props {
   onNewNoteChange: (note: string) => void;
   onAddNote: () => void;
   onChange: (patch: Partial<Customer>) => void;
-  onReschedule: (customerId: string, date: string, reason: string) => void;
+  onReschedule: (customerId: string, date: string, reason: string, mode?: 'defer' | 'add') => void;
 }
 
 export function TimelineNotesSection({ customer, notes, newNote, onNewNoteChange, onAddNote, onChange, onReschedule }: Props) {
@@ -141,6 +141,7 @@ export function TimelineNotesSection({ customer, notes, newNote, onNewNoteChange
                 onReschedule={onReschedule}
                 label="Add custom follow-up"
                 title="New Custom Follow-Up"
+                mode="add"
               />
             )}
           </div>

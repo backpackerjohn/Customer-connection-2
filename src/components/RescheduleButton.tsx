@@ -3,12 +3,13 @@ import { CalendarRange, X } from 'lucide-react';
 
 interface Props {
   customerId: string;
-  onReschedule: (customerId: string, date: string, reason: string) => void;
+  onReschedule: (customerId: string, date: string, reason: string, mode?: 'defer' | 'add') => void;
   label?: string;
   title?: string;
+  mode?: 'defer' | 'add';
 }
 
-export function RescheduleButton({ customerId, onReschedule, label = 'Reschedule', title = 'Reschedule Follow Up' }: Props) {
+export function RescheduleButton({ customerId, onReschedule, label = 'Reschedule', title = 'Reschedule Follow Up', mode = 'add' }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [date, setDate] = useState(() => {
     const tom = new Date();
@@ -20,7 +21,7 @@ export function RescheduleButton({ customerId, onReschedule, label = 'Reschedule
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!date || !reason.trim()) return;
-    onReschedule(customerId, date, reason.trim());
+    onReschedule(customerId, date, reason.trim(), mode);
     setIsOpen(false);
   };
 

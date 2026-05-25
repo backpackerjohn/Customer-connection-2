@@ -39,13 +39,45 @@ export async function createCustomer(
  */
 export async function updateCustomer(
   customerId: string, 
-  customer: Customer
+  customer: Customer,
+  lastSaved?: Customer
 ): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { id, createdAt, createdBy, ...customerData } = customer;
   
+  let dataToUpdate: Record<string, unknown> = {};
+  if (lastSaved) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id: _, createdAt: __, createdBy: ___, ...lastSavedData } = lastSaved;
+    
+    const allKeys = new Set([...Object.keys(customerData), ...Object.keys(lastSavedData)]) as Set<keyof typeof customerData>;
+    for (const key of allKeys) {
+      if (key === 'updatedAt') continue;
+      
+      const newVal = customerData[key];
+      const oldVal = lastSavedData[key];
+      
+      let changed = false;
+      if (key === 'manualReminders') {
+        if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
+          changed = true;
+        }
+      } else {
+        if (newVal !== oldVal) {
+          changed = true;
+        }
+      }
+      
+      if (changed) {
+        dataToUpdate[key] = newVal === undefined ? null : newVal;
+      }
+    }
+  } else {
+    dataToUpdate = customerData;
+  }
+  
   await updateDoc(doc(db, 'customers', customerId), {
-    ...customerData,
+    ...dataToUpdate,
     updatedAt: serverTimestamp()
   });
 }

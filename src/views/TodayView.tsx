@@ -14,7 +14,7 @@ import { handleFirestoreError, OperationType } from '../lib/firebase';
 interface Props {
   customers: Customer[];
   onTexted: (customerId: string, when: Date, closedKinds: ReminderKind[]) => void;
-  onReschedule: (customerId: string, date: string, reason: string) => void;
+  onReschedule: (customerId: string, date: string, reason: string, mode?: 'defer' | 'add') => void;
   user: User | null;
   onAddNote: (customerId: string, content: string) => Promise<void>;
 }
@@ -81,7 +81,30 @@ export function TodayView({ customers, onTexted, onReschedule, user, onAddNote }
     setNewNoteText('');
   };
 
-  const today = new Date();
+  const [today, setToday] = useState(() => new Date());
+
+  useEffect(() => {
+    const updateToday = () => {
+      setToday(new Date());
+    };
+
+    const intervalId = setInterval(updateToday, 60000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        updateToday();
+      }
+    };
+
+    window.addEventListener('focus', updateToday);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', updateToday);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   const entries = customers
     .map(customer => {
@@ -98,7 +121,7 @@ export function TodayView({ customers, onTexted, onReschedule, user, onAddNote }
   const getDaysOverdueText = (dueDateStr: string): string | null => {
     const parts = dueDateStr.split('-');
     const due = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    const now = new Date();
+    const now = new Date(today);
     now.setHours(0, 0, 0, 0);
     due.setHours(0, 0, 0, 0);
     const diffTime = now.getTime() - due.getTime();
@@ -230,6 +253,7 @@ export function TodayView({ customers, onTexted, onReschedule, user, onAddNote }
                   <RescheduleButton 
                     customerId={customer.id!}
                     onReschedule={onReschedule}
+                    mode="defer"
                   />
                   <div className="bg-neutral-50 border border-gray-150 rounded-xl px-4 py-2 transition-colors">
                     <TextedCheckbox 

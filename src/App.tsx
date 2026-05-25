@@ -69,6 +69,32 @@ export default function App() {
     file: File 
   }[]>([]);
 
+  const [retryTrigger, setRetryTrigger] = useState(0);
+  const isSavingRef = useRef<boolean>(false);
+  const currentCustomerRef = useRef<Customer>(currentCustomer);
+  const lastSavedRef = useRef<Customer>(emptyCustomer);
+
+  useEffect(() => {
+    currentCustomerRef.current = currentCustomer;
+  }, [currentCustomer]);
+
+  useEffect(() => {
+    const handleRecovery = () => {
+      if (isDirty && saveStatus === 'error') {
+        setSaveStatus('idle');
+        setRetryTrigger(prev => prev + 1);
+      }
+    };
+
+    window.addEventListener('online', handleRecovery);
+    window.addEventListener('focus', handleRecovery);
+
+    return () => {
+      window.removeEventListener('online', handleRecovery);
+      window.removeEventListener('focus', handleRecovery);
+    };
+  }, [isDirty, saveStatus]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
@@ -95,12 +121,14 @@ export default function App() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting status before debounce
     setSaveStatus('idle'); 
     const timeoutId = setTimeout(async () => {
+      if (isSavingRef.current) return;
+      isSavingRef.current = true;
       try {
         setSaveStatus('saving');
         let customerId = currentCustomer.id;
 
         if (customerId) {
-          await updateCustomer(customerId, currentCustomer);
+          await updateCustomer(customerId, currentCustomer, lastSavedRef.current);
         } else {
           customerId = await createCustomer(user.uid, currentCustomer);
           // Update current state with the new ID to prevent multiple creations
@@ -137,15 +165,23 @@ export default function App() {
           }
         }
         setSaveStatus('synced');
-        setIsDirty(false);
+        if (currentCustomerRef.current === currentCustomer) {
+          setIsDirty(false);
+          lastSavedRef.current = currentCustomer;
+        }
       } catch (error) {
         setSaveStatus('error');
         handleFirestoreError(error, OperationType.WRITE, 'customers');
+      } finally {
+        isSavingRef.current = false;
+        if (currentCustomerRef.current !== currentCustomer) {
+          setRetryTrigger(prev => prev + 1);
+        }
       }
     }, 2000);
 
     return () => clearTimeout(timeoutId);
-  }, [currentCustomer, isDirty, user, pendingAINotes, pendingImages]);
+  }, [currentCustomer, isDirty, user, pendingAINotes, pendingImages, retryTrigger]);
 
   useEffect(() => {
     if (!user) return;
@@ -158,6 +194,33 @@ export default function App() {
 
     return unsubscribe;
   }, [user]);
+
+  // Keep the open profile fresh when the customers array updates and there are no unsaved edits
+  useEffect(() => {
+    if (currentCustomer.id && !isDirty) {
+      const matched = customers.find(c => c.id === currentCustomer.id);
+      if (matched) {
+        // Compare values to see if anything changed
+        const hasChanges = Object.keys({ ...currentCustomer, ...matched }).some(k => {
+          const key = k as keyof Customer;
+          if (key === 'createdAt' || key === 'updatedAt') {
+            const ta = currentCustomer[key] as { seconds: number; nanoseconds: number } | undefined;
+            const tb = matched[key] as { seconds: number; nanoseconds: number } | undefined;
+            return ta?.seconds !== tb?.seconds || ta?.nanoseconds !== tb?.nanoseconds;
+          }
+          if (key === 'manualReminders') {
+            return JSON.stringify(currentCustomer[key]) !== JSON.stringify(matched[key]);
+          }
+          return currentCustomer[key] !== matched[key];
+        });
+        if (hasChanges) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- keep currentCustomer in sync with other devices edits
+          setCurrentCustomer(matched);
+          lastSavedRef.current = matched;
+        }
+      }
+    }
+  }, [customers, currentCustomer.id, isDirty, currentCustomer]);
 
   // Fetch notes for current customer
   useEffect(() => {
@@ -179,16 +242,20 @@ export default function App() {
 
   const handleNewCustomer = () => {
     setCurrentCustomer(emptyCustomer);
+    lastSavedRef.current = emptyCustomer;
     setSaveStatus('idle');
     setIsDirty(false);
     setView('profile');
+    setValuationError(null);
   };
 
   const handleEditCustomer = (customer: Customer) => {
     setCurrentCustomer(customer);
+    lastSavedRef.current = customer;
     setSaveStatus('synced');
     setIsDirty(false);
     setView('profile');
+    setValuationError(null);
   };
 
   const handleTexted = async (customerId: string, when: Date, closedKinds: ReminderKind[]) => {
@@ -233,7 +300,7 @@ export default function App() {
     }
   };
 
-  const handleReschedule = async (customerId: string, dateStr: string, reason: string) => {
+  const handleReschedule = async (customerId: string, dateStr: string, reason: string, mode: 'defer' | 'add' = 'add') => {
     if (!user) return;
 
     const targetCustomer = customers.find(c => c.id === customerId);
@@ -243,10 +310,15 @@ export default function App() {
       const activeReminders = targetCustomer.manualReminders || [];
       const updatedReminders = [...activeReminders, { date: dateStr, reason }];
       
-      const nextDue = computeNextCadenceDue({
-        ...targetCustomer,
-        manualReminders: updatedReminders
-      }, REMINDER_CONFIG);
+      let nextDue: string | null;
+      if (mode === 'defer') {
+        nextDue = dateStr;
+      } else {
+        nextDue = computeNextCadenceDue({
+          ...targetCustomer,
+          manualReminders: updatedReminders
+        }, REMINDER_CONFIG);
+      }
 
       const patch = {
         manualReminders: updatedReminders,
@@ -256,7 +328,13 @@ export default function App() {
       await updateCustomer(customerId, { ...targetCustomer, ...patch });
 
       if (currentCustomer.id === customerId) {
-        setCurrentCustomer(prev => ({ ...prev, ...patch }));
+        setCurrentCustomer(prev => {
+          const updated = { ...prev, ...patch };
+          if (!isDirty) {
+            lastSavedRef.current = updated;
+          }
+          return updated;
+        });
       }
     } catch (error) {
       console.error('Failed to reschedule:', error);
@@ -280,9 +358,9 @@ export default function App() {
     setTimeout(() => setSoldError(null), 4000);
   };
 
-  const showValuationError = (msg: string) => {
-    setValuationError(msg);
-    setTimeout(() => setValuationError(null), 4000);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const showValuationError = (_msg: string) => {
+    setValuationError("Couldn't get a reliable trade value right now — the sources may not have matching data for this VIN. Try again, or enter the numbers manually.");
   };
 
   const handleAddNote = async () => {
@@ -422,6 +500,7 @@ export default function App() {
     },
     options?: { skipCache?: boolean }
   ) => {
+    setValuationError(null);
     const token = ++requestTokenRef.current;
     const capturedId = currentCustomer.id;
     setIsEstimatingTradeValue(true);
@@ -435,6 +514,7 @@ export default function App() {
       }
 
       if (result) {
+        setValuationError(null);
         updateCustomerState({ 
           tradeValueExcellentLow: result.excellent.low,
           tradeValueExcellentHigh: result.excellent.high,

@@ -19,15 +19,15 @@ export const SaveStatusIndicator = ({ status, isDirty }: Props) => {
       Synced
     </div>
   );
-  if (isDirty) return (
-    <div className="flex items-center gap-1.5 text-amber-600 font-bold uppercase tracking-tighter text-[10px]">
-      <div className="w-1.5 h-1.5 bg-amber-600 rounded-full animate-pulse" />
-      Unsaved Changes
+  if (status === 'error') return (
+    <div id="save-status-error" className="flex items-center gap-1.5 text-red-600 font-bold uppercase tracking-tighter text-[10px]">
+      Error Saving
     </div>
   );
-  if (status === 'error') return (
-    <div className="flex items-center gap-1.5 text-red-600 font-bold uppercase tracking-tighter text-[10px]">
-      Error Saving
+  if (isDirty) return (
+    <div id="save-status-dirty" className="flex items-center gap-1.5 text-amber-600 font-bold uppercase tracking-tighter text-[10px]">
+      <div className="w-1.5 h-1.5 bg-amber-600 rounded-full animate-pulse" />
+      Unsaved Changes
     </div>
   );
   return null;

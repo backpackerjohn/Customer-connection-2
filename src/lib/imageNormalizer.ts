@@ -33,15 +33,18 @@ export async function normalizeImageForVision(file: File): Promise<{
 
       let targetWidth = originalWidth;
       let targetHeight = originalHeight;
-      const MAX_EDGE = 1600;
+      
+      const isPng = file.type === 'image/png';
+      const maxEdge = isPng ? 3072 : 2048;
+      const outputMimeType = isPng ? 'image/png' : 'image/jpeg';
 
-      if (originalWidth > MAX_EDGE || originalHeight > MAX_EDGE) {
+      if (originalWidth > maxEdge || originalHeight > maxEdge) {
         if (originalWidth > originalHeight) {
-          targetWidth = MAX_EDGE;
-          targetHeight = Math.round((originalHeight * MAX_EDGE) / originalWidth);
+          targetWidth = maxEdge;
+          targetHeight = Math.round((originalHeight * maxEdge) / originalWidth);
         } else {
-          targetHeight = MAX_EDGE;
-          targetWidth = Math.round((originalWidth * MAX_EDGE) / originalHeight);
+          targetHeight = maxEdge;
+          targetWidth = Math.round((originalWidth * maxEdge) / originalHeight);
         }
       }
 
@@ -63,12 +66,14 @@ export async function normalizeImageForVision(file: File): Promise<{
         imgSource.close(); // Close ImageBitmap to free resources
       }
 
-      const base64DataWithPrefix = canvas.toDataURL('image/jpeg', 0.92);
+      const base64DataWithPrefix = isPng
+        ? canvas.toDataURL('image/png')
+        : canvas.toDataURL('image/jpeg', 0.95);
       const base64 = base64DataWithPrefix.split(',')[1];
 
       return {
         base64,
-        mimeType: 'image/jpeg'
+        mimeType: outputMimeType
       };
     } catch (error) {
       console.error('Image normalization failed, falling back to original:', error);

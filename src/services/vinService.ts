@@ -67,6 +67,7 @@ export async function readVinFromImage(image: ImageData): Promise<VinImageResult
         ],
         config: {
           systemInstruction,
+          temperature: 0,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,

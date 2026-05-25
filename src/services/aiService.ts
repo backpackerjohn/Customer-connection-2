@@ -63,8 +63,14 @@ export async function processCustomerChat(
     - leadSourceType: Structured source tag. ONLY emit one of: "walk-in" (customer walked into the dealership), "crm" (CRM lead / phone up), or "vep" (Vehicle Exchange Program / Service Customer). Do NOT emit other values — Dealer Wizard, FB Marketplace, and any other source require manual dealer entry via the profile chip. If the source is unclear, omit the field.
     - purchaseDate: Date the customer bought their vehicle (YYYY-MM-DD)
  
+     VEHICLE CLASSIFICATION GUIDANCE (CRITICAL FOR ACCURATE EXTRACTION):
+     - A vehicle the customer wants to BUY maps to vehicleYear, vehicleMake, vehicleModel, vehicleVin, vehicleStock, vehicleMiles.
+     - A vehicle the customer currently owns or is giving up — including any vehicle shown under a 'Currently Owns', 'Garage', 'Current Vehicle', or 'Trade-In' heading, or described as a trade — maps to tradeYear, tradeMake, tradeModel, tradeTrim, tradeMileage, tradeVin, and you MUST set hasTradeIn = true.
+     - If both a purchase vehicle and an owned/trade vehicle appear, fill BOTH sets. Never put the same vehicle in both.
+     - If multiple owned vehicles appear, use the one with the newest model year for the trade fields.
+
      RULES:
-     1. ONLY return the fields you are confident about.
+     1. Extract EVERY field that appears in the input, including hard-to-read ones like VIN, ZIP, and phone. Return your best reading even when you are not fully certain. Never invent data that is not present, but never omit a field just because it is difficult to read.
      2. DATA FORMATTING (CRITICAL):
         - Name Fields: Proper Title Case. Middle Initial should be a single character if possible.
         - Date Fields (dob, dlExpiration, purchaseDate): Format as YYYY-MM-DD (ISO 8601). The form uses native HTML date inputs which require this exact format. Example: 1985-04-17. Do NOT use MM/DD/YYYY or any other format.
@@ -76,7 +82,7 @@ export async function processCustomerChat(
     3. If an image is provided (like a Driver's License), prioritize extracting all legible facts from it (Name, DOB, Address, DL Number/State/Expiry).
     4. When an image is provided, perform full OCR and emit EVERY field you can read from it — do not stop after the first 2-3 fields.
     5. Always return a 'message' field summarizing what you did (e.g., "I've extracted John's info from his driver's license").
-    6. 'hasGoodNotes' should be true if you found extra context not in the fields.
+    6. Only set hasGoodNotes true for facts about the car-buying relationship — payment/budget goals, trade intentions, objections, timeline, vehicle preferences, or family/usage needs. Ignore incidental document text such as amounts paid, policy numbers, barcodes, or data already captured in a structured field. If nothing deal-relevant is present, omit the note.
     7. When an image is provided, set 'documentType' to one of: 'license' (driver's license), 'insurance' (insurance ID card), 'window_sticker' (vehicle Monroney sticker / dealer addendum), or 'other'. When no image is provided, omit documentType.
     ${currentDataBlock}
   `;
@@ -96,6 +102,7 @@ export async function processCustomerChat(
         ],
         config: {
           systemInstruction,
+          temperature: 0,
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -188,6 +195,15 @@ export async function processCustomerChat(
       const iso = toISODate(parsedResult.updatedFields.purchaseDate);
       if (iso) parsedResult.updatedFields.purchaseDate = iso;
       else delete parsedResult.updatedFields.purchaseDate;
+    }
+
+    if (
+      parsedResult.documentType === 'license' ||
+      parsedResult.documentType === 'insurance' ||
+      parsedResult.documentType === 'window_sticker'
+    ) {
+      parsedResult.hasGoodNotes = false;
+      delete parsedResult.notesSummary;
     }
 
     return parsedResult as ChatResponse;

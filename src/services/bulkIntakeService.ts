@@ -75,6 +75,7 @@ export async function extractBulkCustomers(image: { inlineData: { data: string; 
       ],
       config: {
         systemInstruction,
+        temperature: 0,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,

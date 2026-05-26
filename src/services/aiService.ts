@@ -197,6 +197,18 @@ export async function processCustomerChat(
       else delete parsedResult.updatedFields.purchaseDate;
     }
 
+    const uf = parsedResult.updatedFields as Record<string, unknown> | undefined;
+    if (uf) {
+      const hasValue = (k: string) => {
+        const v = uf[k];
+        return v !== null && v !== undefined && String(v).trim() !== '';
+      };
+      const hasTradeData = ['tradeYear', 'tradeMake', 'tradeModel', 'tradeTrim', 'tradeMileage', 'tradeVin'].some(hasValue);
+      const hasFinancialData = ['lienholder', 'payoffAmount', 'monthlyPayment', 'monthsRemaining'].some(hasValue);
+      if (hasTradeData || hasFinancialData) uf.hasTradeIn = true;
+      if (hasFinancialData) uf.stillOwe = true;
+    }
+
     if (
       parsedResult.documentType === 'license' ||
       parsedResult.documentType === 'insurance' ||

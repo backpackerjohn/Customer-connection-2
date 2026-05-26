@@ -28,7 +28,7 @@ A mobile-first dealer CRM. Dealers sign in with Google, create customer profiles
 - `src/services/imagesService.ts` — Firebase Storage operations (customer images + blank PDF retrieval).
 
 ### Gemini extractors (two of them — keep their schemas in sync)
-- `src/services/aiService.ts` — `processCustomerChat`. Powers the single-customer chat overlay. Owns its own response schema, system instruction, and response parsing.
+- `src/services/aiService.ts` — `processCustomerChat`. Powers the single-customer chat overlay. Owns its own response schema, system instruction, and response parsing. Post-processes extracted fields to force `hasTradeIn = true` when any trade field is returned, and BOTH `stillOwe = true` AND `hasTradeIn = true` when any financial field (lienholder/payoffAmount/monthlyPayment/monthsRemaining) is returned (ensures fields hidden behind profile UI toggles are visible; mirrors how Bulk Intake forces hasTradeIn).
 - `src/services/bulkIntakeService.ts` — `extractBulkCustomers`. Powers Bulk Intake's screenshot OCR. Owns its own response schema, system instruction (with tag recognition for `(New)`/`(Used)`/`(Trade-In)` and lead-source/lead-generated-date extraction), and post-processing pipeline.
 
 ### Domain services
@@ -52,7 +52,7 @@ A mobile-first dealer CRM. Dealers sign in with Google, create customer profiles
 - `src/lib/timing.ts` — `timed(label, fn)` performance instrumentation helper.
 
 ### Components
-- `src/components/` — atomic UI primitives: `InputField`, `Toggle`, `StatusBadge`, `SaveStatusIndicator`, `MenuButton`, `SubButton`, `NavItem`, `NavIconButton`, `AIChatOverlay`, `RescheduleButton`, `TextedCheckbox`, `TradeEquityPanel`, `VinLookupButtons`, `EditableChip` (click-to-expand chip with popover, used for status + leadSourceType on profile and Bulk Intake rows), `CopyButton` (click-to-copy icon button with checkmark flash; used on the Today page for customer name + phone + rendered template text).
+- `src/components/` — atomic UI primitives: `InputField`, `Toggle`, `StatusBadge`, `SaveStatusIndicator`, `MenuButton`, `SubButton`, `NavItem`, `NavIconButton`, `AIChatOverlay` (accepts pasted images via Ctrl+V/Cmd+V in addition to Upload and Camera, routing through `handleSend`), `RescheduleButton`, `TextedCheckbox`, `TradeEquityPanel`, `VinLookupButtons`, `EditableChip` (click-to-expand chip with popover, used for status + leadSourceType on profile and Bulk Intake rows), `CopyButton` (click-to-copy icon button with checkmark flash; used on the Today page for customer name + phone + rendered template text).
 
 ### Views
 - `src/views/LoginView.tsx` — Google sign-in screen.

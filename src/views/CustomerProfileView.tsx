@@ -23,7 +23,9 @@ import { Customer, Note } from '../types';
 import { SaveStatusIndicator } from '../components/SaveStatusIndicator';
 import { MenuButton } from '../components/MenuButton';
 import { SubButton } from '../components/SubButton';
-import { EditableChip } from '../components/EditableChip';
+import { SegmentedControl } from '../components/SegmentedControl';
+import { ChipSelect } from '../components/ChipSelect';
+import { LeadSourceChips } from '../components/LeadSourceChips';
 import { CustomerInfoSection } from './profile/CustomerInfoSection';
 import { InsuranceSection } from './profile/InsuranceSection';
 import { NewVehicleSection } from './profile/NewVehicleSection';
@@ -114,50 +116,45 @@ export function CustomerProfileView({
 
       <div className="p-6 space-y-12 pb-32">
         <div className="px-2">
-          <div className="card p-4 flex flex-wrap items-center gap-3">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</span>
-            <EditableChip
-              value={currentCustomer.status}
-              options={[
-                { value: 'lead', label: 'Unsold' },
-                { value: 'sold', label: 'Sold' },
-                { value: 'inactive', label: 'Inactive' },
-              ]}
-              onChange={(v) => v && onUpdateCustomer({ status: v })}
-              color={currentCustomer.status === 'sold' ? 'emerald' : currentCustomer.status === 'inactive' ? 'gray' : 'blue'}
-            />
-            <span className="h-4 w-[1px] bg-gray-200" />
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Lead Source</span>
-            <EditableChip
-              value={currentCustomer.leadSourceType as 'walk-in' | 'crm' | 'vep' | 'dealer-wizard' | 'fb-marketplace' | undefined}
-              options={[
-                { value: 'walk-in', label: 'Walk-In' },
-                { value: 'crm', label: 'CRM' },
-                { value: 'vep', label: 'VEP' },
-                { value: 'dealer-wizard', label: 'Dealer Wizard' },
-                { value: 'fb-marketplace', label: 'FB Marketplace' },
-              ]}
-              onChange={(v) => onUpdateCustomer({ leadSourceType: v })}
-              placeholder="— Not set —"
-              color="gray"
-              allowClear
-            />
-            <span className="h-4 w-[1px] bg-gray-200" />
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Contact</span>
-            <EditableChip
-              value={currentCustomer.contactChannel}
-              options={[
-                { value: 'text', label: 'Text' },
-                { value: 'crm-text', label: 'CRM Text' },
-                { value: 'email', label: 'Email' },
-                { value: 'snapchat', label: 'Snapchat' },
-                { value: 'facebook', label: 'Facebook' },
-              ]}
-              onChange={(v) => onUpdateCustomer({ contactChannel: v })}
-              placeholder="— Not set —"
-              color="gray"
-              allowClear
-            />
+          <div className="card p-4 space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest w-24 shrink-0">Status</span>
+              <SegmentedControl
+                value={currentCustomer.status}
+                options={[
+                  { value: 'lead', label: 'Unsold', activeClass: 'bg-blue-600 text-white' },
+                  { value: 'sold', label: 'Sold', activeClass: 'bg-emerald-600 text-white' },
+                  { value: 'inactive', label: 'Inactive', activeClass: 'bg-gray-500 text-white' },
+                ]}
+                onChange={(v) => onUpdateCustomer({ status: v })}
+              />
+            </div>
+            <div className="flex flex-wrap items-start gap-3">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest w-24 shrink-0 pt-1">Lead Source</span>
+              <div className="flex-1 min-w-0">
+                <LeadSourceChips
+                  value={currentCustomer.leadSourceType}
+                  onChange={(v) => onUpdateCustomer({ leadSourceType: v })}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-start gap-3">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest w-24 shrink-0 pt-1">Contact</span>
+              <div className="flex-1 min-w-0">
+                <ChipSelect
+                  value={currentCustomer.contactChannel}
+                  options={[
+                    { value: 'text', label: 'Text' },
+                    { value: 'crm-text', label: 'CRM Text' },
+                    { value: 'email', label: 'Email' },
+                    { value: 'snapchat', label: 'Snapchat' },
+                    { value: 'facebook', label: 'Facebook' },
+                  ]}
+                  onChange={(v) => onUpdateCustomer({ contactChannel: v })}
+                  allowClear
+                />
+              </div>
+            </div>
           </div>
         </div>
         <CustomerInfoSection customer={currentCustomer} onChange={onUpdateCustomer} />

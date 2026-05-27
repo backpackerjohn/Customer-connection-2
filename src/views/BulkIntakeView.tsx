@@ -19,6 +19,9 @@ import { extractBulkCustomers } from '../services/bulkIntakeService';
 import { findDuplicates, DuplicateMatch } from '../lib/duplicateDetection';
 import { createCustomer } from '../services/customersService';
 import { EditableChip } from '../components/EditableChip';
+import { ChipSelect } from '../components/ChipSelect';
+import { LeadSourceChips } from '../components/LeadSourceChips';
+import { LEAD_SOURCE_FLAT_OPTIONS } from '../lib/leadSource';
 import { rollNextCadence } from '../lib/reminders/engine';
 import { REMINDER_CONFIG } from '../lib/reminders/config';
 
@@ -70,12 +73,12 @@ const STATUS_CHIP_OPTIONS = [
   { value: 'inactive' as const, label: 'Inactive' },
 ];
 
-const SOURCE_CHIP_OPTIONS = [
-  { value: 'walk-in' as const, label: 'Walk-In' },
-  { value: 'crm' as const, label: 'CRM' },
-  { value: 'vep' as const, label: 'VEP' },
-  { value: 'dealer-wizard' as const, label: 'Dealer Wizard' },
-  { value: 'fb-marketplace' as const, label: 'FB Marketplace' },
+const CONTACT_CHIP_OPTIONS = [
+  { value: 'text' as const, label: 'Text' },
+  { value: 'crm-text' as const, label: 'CRM Text' },
+  { value: 'email' as const, label: 'Email' },
+  { value: 'snapchat' as const, label: 'Snapchat' },
+  { value: 'facebook' as const, label: 'Facebook' },
 ];
 
 interface Props {
@@ -110,6 +113,8 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
   const [batchProcessed, setBatchProcessed] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [processError, setProcessError] = useState<string | null>(null);
+  const [bulkLeadSource, setBulkLeadSource] = useState<Customer['leadSourceType']>(undefined);
+  const [bulkContact, setBulkContact] = useState<Customer['contactChannel']>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addFiles = (files: File[]) => {
@@ -305,6 +310,18 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
       }
       return row;
     }));
+  };
+
+  const applyLeadSourceToAll = (v: Customer['leadSourceType']) => {
+    if (isCommitting || hasCommitted) return;
+    setBulkLeadSource(v);
+    setRows(prev => prev.map(r => ({ ...r, customer: { ...r.customer, leadSourceType: v } })));
+  };
+
+  const applyContactToAll = (v: Customer['contactChannel']) => {
+    if (isCommitting || hasCommitted) return;
+    setBulkContact(v);
+    setRows(prev => prev.map(r => ({ ...r, customer: { ...r.customer, contactChannel: v } })));
   };
 
   const handleActionChange = (index: number, action: 'new' | 'duplicate' | 'skip') => {
@@ -604,6 +621,23 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
             </div>
           </div>
 
+          {!hasCommitted && (
+            <div className="flex flex-col gap-3 bg-white p-3 rounded-xl border border-gray-100">
+              <div className="flex flex-wrap items-start gap-3">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider w-32 shrink-0 pt-1">Set lead source for all</span>
+                <div className="flex-1 min-w-0">
+                  <LeadSourceChips value={bulkLeadSource} onChange={applyLeadSourceToAll} />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-start gap-3">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider w-32 shrink-0 pt-1">Set contact for all</span>
+                <div className="flex-1 min-w-0">
+                  <ChipSelect value={bulkContact} options={CONTACT_CHIP_OPTIONS} onChange={applyContactToAll} allowClear />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Core Results Tracker Banner once save is complete */}
           {hasCommitted && !isCommitting && (
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-rose-200 text-rose-800 rounded-xl">
@@ -706,9 +740,18 @@ export function BulkIntakeView({ customers, user, onComplete }: Props) {
                         />
                         <EditableChip
                           value={row.customer.leadSourceType}
-                          options={SOURCE_CHIP_OPTIONS}
+                          options={LEAD_SOURCE_FLAT_OPTIONS}
                           onChange={(v) => handleFieldChange(index, 'leadSourceType', v)}
                           placeholder={row.customer.leadSource ? row.customer.leadSource : '— Source —'}
+                          color="gray"
+                          allowClear
+                          disabled={isCommitting || row.status === 'success'}
+                        />
+                        <EditableChip
+                          value={row.customer.contactChannel}
+                          options={CONTACT_CHIP_OPTIONS}
+                          onChange={(v) => handleFieldChange(index, 'contactChannel', v)}
+                          placeholder="— Contact —"
                           color="gray"
                           allowClear
                           disabled={isCommitting || row.status === 'success'}

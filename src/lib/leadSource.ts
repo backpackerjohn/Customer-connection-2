@@ -52,3 +52,16 @@ export function findLeadSourceGroup(value?: string): LeadSourceGroup | undefined
     g => g.value === value || g.children.some(c => c.value === value),
   );
 }
+
+export interface LeadSourceFlatOption {
+  value: LeadSourceValue;
+  label: string;
+}
+
+// Flattened single-select list for COMPACT dropdowns (e.g. Bulk Intake rows): each parent
+// followed by its children, children labeled with the parent for context ("CRM › VEP").
+export const LEAD_SOURCE_FLAT_OPTIONS: LeadSourceFlatOption[] = LEAD_SOURCE_TAXONOMY.flatMap(g => [
+  { value: g.value, label: g.label },
+  ...g.children.map(c => ({ value: c.value, label: `${g.label} › ${c.label}` })),
+]);
+

@@ -16,10 +16,8 @@ import { NavItem } from './components/NavItem';
 import { NavIconButton } from './components/NavIconButton';
 
 import { Customer, Note, emptyCustomer } from './types';
-import { 
-  createCustomer, updateCustomer, subscribeToCustomers 
-} from './services/customersService';
-import { createNote, subscribeToNotes } from './services/notesService';
+import { createCustomer, updateCustomer, subscribeToCustomers } from './services/customersService';
+import { createNote, subscribeToNotes, subscribeToAllNotes } from './services/notesService';
 import { createContact } from './services/contactsService';
 import { ReminderKind, recordContact, computeNextCadenceDue, rollNextCadence } from './lib/reminders/engine';
 import { REMINDER_CONFIG } from './lib/reminders/config';
@@ -48,6 +46,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'dashboard' | 'profile' | 'settings' | 'bulk-intake' | 'today' | 'customers'>('dashboard');
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [notesByCustomer, setNotesByCustomer] = useState<Record<string, string[]>>({});
   const [currentCustomer, setCurrentCustomer] = useState<Customer>(emptyCustomer);
   const [notes, setNotes] = useState<Note[]>([]);
   const [newNote, setNewNote] = useState('');
@@ -99,6 +98,9 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setLoading(false);
+      if (!u) {
+        setNotesByCustomer({});
+      }
     });
     return unsubscribe;
   }, []);
@@ -186,13 +188,32 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    const unsubscribe = subscribeToCustomers(
+    const unsubCustomers = subscribeToCustomers(
       user.uid,
       setCustomers,
       (error) => handleFirestoreError(error, OperationType.LIST, 'customers')
     );
 
-    return unsubscribe;
+    const unsubNotes = subscribeToAllNotes(
+      user.uid,
+      (allNotes) => {
+        const map: Record<string, string[]> = {};
+        for (const n of allNotes) {
+          if (!n.customerId) continue;
+          if (!map[n.customerId]) {
+            map[n.customerId] = [];
+          }
+          map[n.customerId].push(n.content);
+        }
+        setNotesByCustomer(map);
+      },
+      (error) => handleFirestoreError(error, OperationType.LIST, 'notes[all]')
+    );
+
+    return () => {
+      unsubCustomers();
+      unsubNotes();
+    };
   }, [user]);
 
   // Keep the open profile fresh when the customers array updates and there are no unsaved edits
@@ -659,8 +680,12 @@ export default function App() {
           >
             <CustomersView 
               customers={customers}
+              notesByCustomer={notesByCustomer}
               onNewCustomer={handleNewCustomer}
               onEditCustomer={handleEditCustomer}
+              onTexted={handleTexted}
+              onReschedule={handleReschedule}
+              onAddNote={handleAddNoteForCustomer}
             />
           </motion.div>
         )}

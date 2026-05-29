@@ -215,5 +215,9 @@ service cloud.firestore {
         allow update, delete: if isValidId(contactId) && isSignedIn() && existing().get('authorId', null) == request.auth.uid;
       }
     }
+
+    match /{path=**}/notes/{noteId} {
+      allow list: if isSignedIn() && resource.data.get('authorId', null) == request.auth.uid;
+    }
   }
 }

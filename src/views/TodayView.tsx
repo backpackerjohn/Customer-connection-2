@@ -55,6 +55,30 @@ export function TodayView({ customers, onTexted, onReschedule, user, onAddNote }
     if (modelYear) localStorage.setItem('latestModelYear', modelYear);
   }, [modelYear]);
 
+  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem('todayPinnedIds');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const pinnedCustomers = React.useMemo(() => {
+    return customers.filter(c => c.id && pinnedIds.includes(c.id));
+  }, [customers, pinnedIds]);
+
+  const handlePinnedTexted = (customerId: string, when: Date, closedKinds: ReminderKind[]) => {
+    onTexted(customerId, when, closedKinds);
+    setPinnedIds(prev => {
+      const next = prev.filter(id => id !== customerId);
+      localStorage.setItem('todayPinnedIds', JSON.stringify(next));
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (!expandedCustomerId || !user) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -172,6 +196,93 @@ export function TodayView({ customers, onTexted, onReschedule, user, onAddNote }
           <code className="bg-gray-50 px-1 py-0.5 rounded">[latest model year]</code>
         </p>
       </div>
+
+      {pinnedCustomers.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+              Pinned from Customers ({pinnedCustomers.length})
+            </h3>
+            <button
+              onClick={() => {
+                setPinnedIds([]);
+                localStorage.setItem('todayPinnedIds', JSON.stringify([]));
+              }}
+              className="text-xs text-amber-750 hover:text-amber-955 font-semibold uppercase tracking-wider transition-colors"
+            >
+              Clear All Pinned
+            </button>
+          </div>
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden divide-y divide-gray-100 shadow-xs">
+            {pinnedCustomers.map((customer) => {
+              const personalizedText = template.trim()
+                ? renderTemplate(template, customer, modelYear)
+                : '';
+
+              return (
+                <div key={customer.id} className="p-5 hover:bg-neutral-50/50 transition-colors">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h4 className="font-bold text-lg text-gray-900 truncate">
+                          {customer.firstName} {customer.middleInitial ? customer.middleInitial + ' ' : ''}{customer.lastName}
+                        </h4>
+                        <CopyButton value={`${customer.firstName} ${customer.lastName}`.trim()} />
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-100 uppercase tracking-wide">
+                          Pinned Pivot
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-500 flex flex-wrap gap-x-3 gap-y-1 font-medium items-center">
+                        {customer.phone && (
+                          <span className="flex items-center gap-1">
+                            {customer.phone}
+                            <CopyButton value={customer.phone} />
+                          </span>
+                        )}
+                        {customer.email && <span>{customer.email}</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 self-end md:self-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPinnedIds(prev => {
+                            const next = prev.filter(id => id !== customer.id);
+                            localStorage.setItem('todayPinnedIds', JSON.stringify(next));
+                            return next;
+                          });
+                        }}
+                        className="text-xs px-3 py-2 border border-gray-100 bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-800 rounded-xl font-medium transition-colors cursor-pointer"
+                      >
+                        Remove Pin
+                      </button>
+                      <div className="bg-neutral-50 border border-gray-150 rounded-xl px-4 py-2 transition-colors">
+                        <TextedCheckbox 
+                          customerId={customer.id!}
+                          closedKinds={['cadence']}
+                          onTexted={handlePinnedTexted}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {personalizedText && (
+                    <div className="mt-3 bg-gray-50 border border-gray-100 rounded-lg p-3 flex items-start justify-between gap-3">
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap flex-1">
+                        {personalizedText}
+                      </p>
+                      <CopyButton 
+                        value={personalizedText} 
+                        label="Copy" 
+                        className="bg-white border border-gray-200 shrink-0"
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {entries.length === 0 ? (
         <div className="py-20 text-center space-y-4 max-w-sm mx-auto">

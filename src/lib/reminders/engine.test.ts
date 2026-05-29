@@ -243,7 +243,8 @@ describe('Reminders Engine', () => {
     const today = new Date('2027-01-01T12:00:00Z');
     const customer: Customer = {
       ...baseCustomer,
-      nextCadenceDue: '2027-02-01' // not due, not nearby
+      nextCadenceDue: '2027-02-01', // not due, not nearby
+      lastContactedAt: '2026-12-31T12:00:00Z'
     };
     const reminders = getDueReminders(customer, today, REMINDER_CONFIG);
     const hRem = reminders.find(r => r.labels.includes("New Year's Day"));

@@ -198,9 +198,9 @@ export function TodayView({ customers, onTexted, onReschedule, user, onAddNote }
       </div>
 
       {pinnedCustomers.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+        <div className="space-y-4 font-sans">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
               Pinned from Customers ({pinnedCustomers.length})
             </h3>
             <button
@@ -208,19 +208,19 @@ export function TodayView({ customers, onTexted, onReschedule, user, onAddNote }
                 setPinnedIds([]);
                 localStorage.setItem('todayPinnedIds', JSON.stringify([]));
               }}
-              className="text-xs text-amber-750 hover:text-amber-955 font-semibold uppercase tracking-wider transition-colors"
+              className="text-[10px] text-amber-700 hover:text-amber-900 font-bold uppercase tracking-widest transition-colors cursor-pointer"
             >
               Clear All Pinned
             </button>
           </div>
-          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden divide-y divide-gray-100 shadow-xs">
+          <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden divide-y divide-gray-100 shadow-sm">
             {pinnedCustomers.map((customer) => {
               const personalizedText = template.trim()
                 ? renderTemplate(template, customer, modelYear)
                 : '';
 
               return (
-                <div key={customer.id} className="p-5 hover:bg-neutral-50/50 transition-colors">
+                <div key={customer.id} className="p-5 hover:bg-neutral-50/40 transition-colors">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="space-y-1.5 min-w-0">
                       <div className="flex items-center gap-3 flex-wrap">
@@ -228,7 +228,7 @@ export function TodayView({ customers, onTexted, onReschedule, user, onAddNote }
                           {customer.firstName} {customer.middleInitial ? customer.middleInitial + ' ' : ''}{customer.lastName}
                         </h4>
                         <CopyButton value={`${customer.firstName} ${customer.lastName}`.trim()} />
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-100 uppercase tracking-wide">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-100/70 uppercase tracking-widest">
                           Pinned Pivot
                         </span>
                       </div>
@@ -252,11 +252,11 @@ export function TodayView({ customers, onTexted, onReschedule, user, onAddNote }
                             return next;
                           });
                         }}
-                        className="text-xs px-3 py-2 border border-gray-100 bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-800 rounded-xl font-medium transition-colors cursor-pointer"
+                        className="text-xs px-3.5 py-2 border border-gray-100 bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-900 rounded-xl font-bold transition-all active:scale-95 cursor-pointer shadow-xs"
                       >
                         Remove Pin
                       </button>
-                      <div className="bg-neutral-50 border border-gray-150 rounded-xl px-4 py-2 transition-colors">
+                      <div className="bg-gray-50 hover:bg-gray-100 font-sans border border-transparent rounded-xl px-3 py-1.5 transition-colors">
                         <TextedCheckbox 
                           customerId={customer.id!}
                           closedKinds={['cadence']}
@@ -266,14 +266,14 @@ export function TodayView({ customers, onTexted, onReschedule, user, onAddNote }
                     </div>
                   </div>
                   {personalizedText && (
-                    <div className="mt-3 bg-gray-50 border border-gray-100 rounded-lg p-3 flex items-start justify-between gap-3">
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap flex-1">
+                    <div className="mt-3 bg-gray-50 border border-gray-100/70 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <p className="text-xs text-gray-700 whitespace-pre-wrap flex-1 leading-relaxed font-sans font-medium">
                         {personalizedText}
                       </p>
                       <CopyButton 
                         value={personalizedText} 
                         label="Copy" 
-                        className="bg-white border border-gray-200 shrink-0"
+                        className="bg-white border border-gray-200 shrink-0 shadow-xs self-end sm:self-start"
                       />
                     </div>
                   )}

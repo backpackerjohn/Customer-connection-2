@@ -3,6 +3,7 @@ import { Plus, Users, ChevronRight, Search, RotateCcw, ChevronDown, ChevronUp, S
 import { motion } from 'motion/react';
 import { Customer } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
+import { InputField } from '../components/InputField';
 import { applyFilters, FilterCriteria, formatDateISO } from '../lib/customerSearch';
 import { renderTemplate, getDefaultModelYear } from '../lib/templateRenderer';
 import { CopyButton } from '../components/CopyButton';
@@ -57,7 +58,7 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
     if (modelYear) localStorage.setItem('latestModelYear', modelYear);
   }, [modelYear]);
 
-  const [showFilters, setShowFilters] = React.useState(true);
+  const [showFilters, setShowFilters] = React.useState(false);
   const [showUnclassified, setShowUnclassified] = React.useState(false);
   const [pushSuccess, setPushSuccess] = React.useState(false);
 
@@ -342,14 +343,14 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
           </p>
         </div>
         
-        <div className="flex items-center gap-3 w-full md:w-auto shrink-0 justify-end">
+        <div className="flex items-center gap-3 w-full md:w-auto shrink-0 justify-end font-sans">
           {filteredCustomers.length > 0 && (
             <button
               onClick={handlePushToToday}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all shadow-sm active:scale-95 ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer ${
                 pushSuccess
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                  : 'bg-amber-100 border-amber-200 hover:bg-amber-200 text-amber-900'
+                  : 'bg-amber-50 border-amber-100 hover:bg-amber-100/90 text-amber-900'
               }`}
             >
               <ArrowUpRight size={16} />
@@ -359,10 +360,10 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
 
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-bold transition-all cursor-pointer ${
               showFilters 
-                ? 'bg-gray-100 border-gray-300 text-gray-800' 
-                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                ? 'bg-gray-100 border-transparent text-gray-900' 
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
             <SlidersHorizontal size={16} />
@@ -371,20 +372,20 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
 
           <button 
             onClick={onNewCustomer}
-            className="bg-gray-950 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm active:scale-95 transition-transform"
+            className="bg-gray-950 hover:bg-gray-800 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm active:scale-95 transition-all font-bold text-sm cursor-pointer"
           >
             <Plus size={18} />
-            <span className="font-semibold text-sm">New Customer</span>
+            <span>New Customer</span>
           </button>
         </div>
       </header>
 
       {/* Outbound Template Bar */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-xs space-y-3">
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4 font-sans">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Outbound Text Template</h3>
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Outbound Text Template</h3>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 font-medium">Current model year:</label>
+            <label className="text-xs text-gray-400 font-bold uppercase tracking-wider">Current model year:</label>
             <input
               type="number"
               value={modelYear}
@@ -392,7 +393,7 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
               min={2000}
               max={2100}
               step={1}
-              className="w-20 text-sm border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:border-gray-400"
+              className="w-20 text-sm bg-gray-100 border-none rounded-lg px-2 py-1 focus:ring-2 focus:ring-gray-900 transition-all font-medium outline-none text-center"
             />
           </div>
         </div>
@@ -401,16 +402,16 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
           onChange={(e) => setTemplate(e.target.value)}
           placeholder="Paste a template. Use [name], [trade model], [trade year], [vehicle model], [vehicle year], or [latest model year]."
           rows={3}
-          className="w-full text-sm border border-gray-200 rounded-lg p-3 focus:outline-none focus:border-gray-400 resize-y"
+          className="w-full text-sm bg-gray-50 border-none rounded-xl p-4 focus:ring-2 focus:ring-gray-900 transition-all font-medium placeholder-gray-400 outline-none resize-y"
         />
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-gray-400 ml-1">
           Placeholders:{' '}
-          <code className="bg-gray-50 px-1 py-0.5 rounded">[name]</code>{' '}
-          <code className="bg-gray-50 px-1 py-0.5 rounded">[trade model]</code>{' '}
-          <code className="bg-gray-50 px-1 py-0.5 rounded">[trade year]</code>{' '}
-          <code className="bg-gray-50 px-1 py-0.5 rounded">[vehicle model]</code>{' '}
-          <code className="bg-gray-50 px-1 py-0.5 rounded">[vehicle year]</code>{' '}
-          <code className="bg-gray-50 px-1 py-0.5 rounded">[latest model year]</code>
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded font-mono text-[10px] text-gray-500 font-bold">[name]</code>{' '}
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded font-mono text-[10px] text-gray-500 font-bold">[trade model]</code>{' '}
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded font-mono text-[10px] text-gray-500 font-bold">[trade year]</code>{' '}
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded font-mono text-[10px] text-gray-500 font-bold">[vehicle model]</code>{' '}
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded font-mono text-[10px] text-gray-500 font-bold">[vehicle year]</code>{' '}
+          <code className="bg-gray-100 px-1.5 py-0.5 rounded font-mono text-[10px] text-gray-500 font-bold">[latest model year]</code>
         </p>
       </div>
 
@@ -422,16 +423,16 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
           className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-6"
         >
           {/* Saved Smart Views */}
-          <div className="bg-neutral-50 border border-gray-100 rounded-xl p-4 space-y-3">
+          <div className="bg-gray-50 rounded-2xl p-5 space-y-4 border border-transparent">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-0.5">
-                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Bookmark size={14} className="text-amber-700" />
+                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                  <Bookmark size={14} className="text-amber-600" />
                   Saved Smart Views
                 </h4>
-                <p className="text-[11px] text-gray-400 font-medium">Reopen a saved filter combination live against your current book.</p>
+                <p className="text-[11px] text-gray-400 font-medium ml-1">Reopen a saved filter combination live against your current book.</p>
               </div>
-
+ 
               {/* Save Current Filter Form */}
               {isFiltered && (
                 <form onSubmit={handleSaveFilter} className="flex items-center gap-2">
@@ -441,44 +442,48 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
                     placeholder="Name this view..."
                     value={newFilterName}
                     onChange={(e) => setNewFilterName(e.target.value)}
-                    className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:border-gray-400 w-44"
+                    className="text-xs bg-white border border-gray-100 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-gray-900 outline-none transition-all w-48 font-medium shadow-xs"
                   />
                   <button
                     type="submit"
-                    className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-200 font-semibold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition-all"
+                    className="bg-gray-900 hover:bg-gray-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1 transition-all active:scale-95 shadow-sm cursor-pointer"
                   >
                     <span>Save View</span>
                   </button>
                 </form>
               )}
             </div>
-
+ 
             {savedFilters.length === 0 ? (
-              <p className="text-xs text-gray-400 italic">No saved views yet. Configure some filters below and give them a name to save.</p>
+              <p className="text-xs text-gray-400 italic ml-1">No saved views yet. Configure some filters below and give them a name to save.</p>
             ) : (
-              <div className="flex flex-wrap gap-2 pt-1">
+              <div className="flex flex-wrap gap-2 pt-1 ml-1">
                 {savedFilters.map((sf, index) => {
                   const isActive = activeFilterName === sf.name;
                   return (
                     <div
                       key={index}
-                      className={`inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full text-xs font-semibold border transition-all ${
+                      className={`inline-flex items-center gap-1.5 pl-3.5 pr-2 py-1.5 rounded-full text-xs font-bold border transition-all ${
                         isActive
-                          ? 'bg-amber-250 border-amber-350 text-amber-950 font-bold shadow-xs'
-                          : 'bg-white border-gray-200 hover:border-gray-300 text-gray-750 hover:bg-neutral-50'
+                          ? 'bg-gray-950 border-gray-950 text-white shadow-sm'
+                          : 'bg-white border-gray-200 hover:border-gray-300 text-gray-700 hover:bg-white/80 shadow-xs'
                       }`}
                     >
                       <button
                         type="button"
                         onClick={() => handleApplySavedFilter(sf)}
-                        className="transition-colors text-left"
+                        className="transition-colors text-left font-bold"
                       >
                         {sf.name}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteSavedFilter(sf.name)}
-                        className="p-0.5 hover:bg-red-50 hover:text-red-600 rounded-full transition-colors shrink-0"
+                        className={`p-0.5 rounded-full transition-colors shrink-0 ${
+                          isActive
+                            ? 'hover:bg-gray-800 text-white/80 hover:text-white'
+                            : 'hover:bg-red-50 hover:text-red-600 text-gray-400'
+                        }`}
                         title={`Delete saved filter "${sf.name}"`}
                       >
                         <X size={12} />
@@ -489,17 +494,17 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
               </div>
             )}
           </div>
-
+ 
           {/* Main recall search */}
           <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-center">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="text"
                 placeholder="Free-text recall (e.g. name, mail, phone, state, trade-makes, etc.)..."
                 value={recall}
                 onChange={(e) => setRecall(e.target.value)}
-                className="w-full pl-10 pr-9 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-950 transition-shadow bg-gray-50/50"
+                className="w-full pl-12 pr-10 py-3.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-gray-900 transition-all font-medium placeholder-gray-400 outline-none"
               />
               {recall && (
                 <button 
@@ -510,11 +515,11 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
                 </button>
               )}
             </div>
-
+ 
             {isFiltered && (
               <button
                 onClick={resetFilters}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors shrink-0"
+                className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl text-sm font-bold text-amber-900 bg-amber-50 hover:bg-amber-100/80 border border-amber-100 transition-all shrink-0 active:scale-95 cursor-pointer"
               >
                 <RotateCcw size={15} />
                 <span>Reset Filters</span>
@@ -522,18 +527,18 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2 font-sans">
             {/* Status & Lead Source */}
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Status</label>
-                <div className="flex flex-wrap gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block">Status</label>
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => setStatus([])}
-                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                    className={`text-xs px-3.5 py-2.5 rounded-xl transition-all font-bold ${
                       status.length === 0
-                        ? 'bg-gray-900 border-gray-900 text-white font-semibold'
-                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                        ? 'bg-gray-900 text-white shadow-xs'
+                        : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-800'
                     }`}
                   >
                     All
@@ -550,10 +555,10 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
                             setStatus([...status, st]);
                           }
                         }}
-                        className={`text-xs capitalize px-2.5 py-1 rounded-full border transition-colors ${
+                        className={`text-xs capitalize px-3.5 py-2.5 rounded-xl transition-all font-bold ${
                           active
-                            ? 'bg-gray-950 border-gray-900 text-white font-semibold'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                            ? 'bg-gray-900 text-white shadow-xs font-bold'
+                            : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-800'
                         }`}
                       >
                         {st}
@@ -564,14 +569,14 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Lead Source</label>
-                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 border border-gray-50 rounded-lg">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block">Lead Source</label>
+                <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1.5 bg-gray-50/50 rounded-2xl border border-gray-100">
                   <button
                     onClick={() => setLeadSourceType([])}
-                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                    className={`text-xs px-3.5 py-2 rounded-xl transition-all font-bold ${
                       leadSourceType.length === 0
-                        ? 'bg-gray-900 border-gray-900 text-white font-semibold'
-                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                        ? 'bg-gray-900 text-white shadow-xs'
+                        : 'bg-gray-55 bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-800'
                     }`}
                   >
                     All
@@ -588,10 +593,10 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
                             setLeadSourceType([...leadSourceType, source]);
                           }
                         }}
-                        className={`text-xs capitalize px-2.5 py-1 rounded-full border transition-colors ${
+                        className={`text-xs capitalize px-3 py-2 rounded-xl transition-all font-bold ${
                           active
-                            ? 'bg-gray-950 border-gray-900 text-white font-semibold'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                            ? 'bg-gray-900 text-white shadow-xs'
+                            : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-800'
                         }`}
                       >
                         {source.replace('-', ' ')}
@@ -603,18 +608,18 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
             </div>
 
             {/* Vehicle owned/wanted & make/model */}
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Vehicle Scope</label>
-                <div className="grid grid-cols-3 gap-1 bg-gray-150 p-1 rounded-xl border border-gray-100">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block">Vehicle Scope</label>
+                <div className="grid grid-cols-3 gap-1 bg-gray-100/80 p-1 rounded-xl">
                   {(['either', 'owns', 'wants'] as const).map(scope => (
                     <button
                       key={scope}
                       onClick={() => setVehicleScope(scope)}
-                      className={`text-xs py-1.5 rounded-lg font-semibold capitalize transition-all ${
+                      className={`text-xs py-2 rounded-lg font-bold capitalize transition-all ${
                         vehicleScope === scope
-                          ? 'bg-white text-gray-950 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-800'
+                          ? 'bg-white text-gray-950 shadow-xs'
+                          : 'text-gray-400 hover:text-gray-600'
                       }`}
                     >
                       {scope}
@@ -623,55 +628,47 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-500">Make (comma-separated)</label>
-                  <input
-                    type="text"
-                    placeholder="Toyota, Ford"
-                    value={makeInput}
-                    onChange={(e) => setMakeInput(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-500">Model (comma-separated)</label>
-                  <input
-                    type="text"
-                    placeholder="RAV4, F150"
-                    value={modelInput}
-                    onChange={(e) => setModelInput(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-1 focus:ring-gray-900 focus:outline-none"
-                  />
-                </div>
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <InputField 
+                  label="Make"
+                  placeholder="Toyota, Ford"
+                  value={makeInput}
+                  onChange={setMakeInput}
+                />
+                <InputField 
+                  label="Model"
+                  placeholder="RAV4, F150"
+                  value={modelInput}
+                  onChange={setModelInput}
+                />
               </div>
             </div>
 
             {/* Age, Recency & Purchases */}
-            <div className="space-y-4">
+            <div className="space-y-5">
               {/* Car Age Facet */}
               <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Car Age</label>
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Car Age</label>
                   {carAgePreset === 'custom' && (
-                    <span className="text-[10px] text-gray-400 font-mono">Custom</span>
+                    <span className="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Custom</span>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1.5">
                   {([
                     { val: 'any', label: 'All' },
                     { val: 'new', label: '<3 yrs' },
-                    { val: 'mid', label: '3-7 yrs' },
-                    { val: 'old', label: '8+ yrs' },
+                    { val: 'mid', label: '3-7' },
+                    { val: 'old', label: '8+' },
                     { val: 'custom', label: 'Custom' }
                   ]).map(ch => (
                     <button
                       key={ch.val}
                       onClick={() => setCarAgePreset(ch.val)}
-                      className={`text-[10px] px-2 py-0.5 rounded-lg border transition-all ${
+                      className={`text-[10px] px-2.5 py-1.5 rounded-lg border-none transition-all font-bold ${
                         carAgePreset === ch.val
-                          ? 'bg-gray-950 text-white border-gray-900 font-semibold'
-                          : 'bg-white text-gray-600 border-gray-100 hover:bg-gray-50'
+                          ? 'bg-gray-900 text-white shadow-xs'
+                          : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-855'
                       }`}
                     >
                       {ch.label}
@@ -685,15 +682,15 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
                       placeholder="Min"
                       value={carAgeMin ?? ''}
                       onChange={(e) => setCarAgeMin(e.target.value ? Number(e.target.value) : undefined)}
-                      className="w-full px-2 py-1 border border-gray-100 rounded text-xs"
+                      className="w-full bg-gray-50 border-none rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-gray-900 font-medium outline-none text-center"
                     />
-                    <span className="text-xs text-gray-400">-</span>
+                    <span className="text-xs text-gray-450 font-bold">-</span>
                     <input
                       type="number"
                       placeholder="Max"
                       value={carAgeMax ?? ''}
                       onChange={(e) => setCarAgeMax(e.target.value ? Number(e.target.value) : undefined)}
-                      className="w-full px-2 py-1 border border-gray-100 rounded text-xs"
+                      className="w-full bg-gray-50 border-none rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-gray-900 font-medium outline-none text-center"
                     />
                   </div>
                 )}
@@ -701,23 +698,23 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
 
               {/* Purchase window & time-since */}
               <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Time Since Purchase</label>
-                <div className="flex flex-wrap gap-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block">Time Since Purchase</label>
+                <div className="flex flex-wrap gap-1.5">
                   {([
                     { val: 'any', label: 'All' },
                     { val: '30d', label: '< 30d' },
-                    { val: '90d', label: '30-90d' },
-                    { val: '365d', label: '90-365d' },
+                    { val: '90d', label: '30-90' },
+                    { val: '365d', label: '90-365' },
                     { val: '1y+', label: '1yr+' },
                     { val: 'custom', label: 'Custom' }
                   ]).map(ch => (
                     <button
                       key={ch.val}
                       onClick={() => setPurchasePreset(ch.val)}
-                      className={`text-[10px] px-2 py-0.5 rounded-lg border transition-all ${
+                      className={`text-[10px] px-2.5 py-1.5 rounded-lg border-none transition-all font-bold ${
                         purchasePreset === ch.val
-                          ? 'bg-gray-950 text-white border-gray-900 font-semibold'
-                          : 'bg-white text-gray-600 border-gray-100 hover:bg-gray-50'
+                          ? 'bg-gray-900 text-white shadow-xs'
+                          : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-855'
                       }`}
                     >
                       {ch.label}
@@ -725,21 +722,21 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
                   ))}
                 </div>
                 {purchasePreset === 'custom' && (
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex items-center gap-2 pt-1 font-sans">
                     <input
                       type="number"
                       placeholder="Min days"
                       value={purchasedWithinDaysMin ?? ''}
                       onChange={(e) => setPurchasedWithinDaysMin(e.target.value ? Number(e.target.value) : undefined)}
-                      className="w-full px-2 py-1 border border-gray-100 rounded text-xs"
+                      className="w-full bg-gray-50 border-none rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-gray-900 font-medium outline-none text-center"
                     />
-                    <span className="text-xs text-gray-400">-</span>
+                    <span className="text-xs text-gray-450 font-bold">-</span>
                     <input
                       type="number"
                       placeholder="Max days"
                       value={purchasedWithinDaysMax ?? ''}
                       onChange={(e) => setPurchasedWithinDaysMax(e.target.value ? Number(e.target.value) : undefined)}
-                      className="w-full px-2 py-1 border border-gray-100 rounded text-xs"
+                      className="w-full bg-gray-50 border-none rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-gray-900 font-medium outline-none text-center"
                     />
                   </div>
                 )}
@@ -748,11 +745,11 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
           </div>
 
           {/* Recency Segment */}
-          <div className="border-t border-gray-100 pt-6 space-y-3">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1.5 shrink-0 col-span-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-500 block">Recency Type</label>
-                <div className="flex bg-gray-50 border border-gray-200 rounded-xl p-1 shrink-0">
+          <div className="border-t border-gray-100 pt-6 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-2 shrink-0 col-span-1">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block">Recency Type</label>
+                <div className="flex bg-gray-100/80 rounded-xl p-1 shrink-0">
                   {([
                     { val: 'lastContactedAt', label: 'Last Contacted' },
                     { val: 'createdAt', label: 'Date Added' },
@@ -761,10 +758,10 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
                     <button
                       key={f.val}
                       onClick={() => setRecencyField(f.val)}
-                      className={`text-xs px-3 py-1 rounded-lg font-semibold transition-all ${
+                      className={`text-xs px-3.5 py-2 rounded-lg font-bold transition-all shrink-0 ${
                         recencyField === f.val
-                          ? 'bg-white text-gray-950 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-800'
+                          ? 'bg-white text-gray-950 shadow-xs'
+                          : 'text-gray-400 hover:text-gray-650'
                       }`}
                     >
                       {f.label}
@@ -773,24 +770,24 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
                 </div>
               </div>
 
-              <div className="space-y-1.5 flex-1 select-none">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-500 block">Recency Range</label>
-                <div className="flex flex-wrap gap-1">
+              <div className="space-y-2 flex-1 select-none">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 block">Recency Range</label>
+                <div className="flex flex-wrap gap-2">
                   {([
                     { val: 'any', label: 'Any' },
                     { val: '7d', label: 'Under 7d' },
                     { val: '30d', label: '7-30d' },
                     { val: '90d', label: '30-90d' },
                     { val: '90d+', label: '90d+' },
-                    { val: 'custom', label: 'Custom Range' }
+                    { val: 'custom', label: 'Custom' }
                   ]).map(ch => (
                     <button
                       key={ch.val}
                       onClick={() => setRecencyPreset(ch.val)}
-                      className={`text-[10px] px-2.5 py-1 rounded-lg border transition-all ${
+                      className={`text-xs px-3.5 py-2 rounded-xl border-none transition-all font-bold ${
                         recencyPreset === ch.val
-                          ? 'bg-gray-950 text-white border-gray-900 font-semibold'
-                          : 'bg-white text-gray-600 border-gray-100'
+                          ? 'bg-gray-900 text-white shadow-xs'
+                          : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
                       }`}
                     >
                       {ch.label}
@@ -801,23 +798,23 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
             </div>
 
             {recencyPreset === 'custom' && (
-              <div className="flex items-center gap-3 pt-2 max-w-md">
-                <div className="space-y-1 w-full">
-                  <span className="text-[10px] uppercase font-bold text-gray-400">Start Date</span>
+              <div className="flex items-center gap-3 pt-2 max-w-md font-sans">
+                <div className="space-y-1.5 w-full">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 ml-1">Start Date</span>
                   <input
                     type="date"
                     value={recencyMin}
                     onChange={(e) => setRecencyMin(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-gray-100 rounded-lg text-xs"
+                    className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-gray-900 focus:outline-none font-medium outline-none shadow-xs"
                   />
                 </div>
-                <div className="space-y-1 w-full">
-                  <span className="text-[10px] uppercase font-bold text-gray-400">End Date</span>
+                <div className="space-y-1.5 w-full">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 ml-1">End Date</span>
                   <input
                     type="date"
                     value={recencyMax}
                     onChange={(e) => setRecencyMax(e.target.value)}
-                    className="w-full px-3 py-1.5 border border-gray-100 rounded-lg text-xs"
+                    className="w-full bg-gray-50 border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-gray-900 focus:outline-none font-medium outline-none shadow-xs"
                   />
                 </div>
               </div>
@@ -863,7 +860,7 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
       )}
 
       {/* Grid of customers */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {customers.length === 0 ? (
           <div className="col-span-full py-20 text-center space-y-4">
             <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
@@ -895,23 +892,23 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
                 layoutId={customer.id}
                 key={customer.id} 
                 onClick={() => onEditCustomer(customer)}
-                className="card p-6 flex flex-col justify-between hover:shadow-md transition-shadow group cursor-pointer"
+                className="card p-6 flex flex-col justify-between hover:shadow-md hover:border-gray-200 transition-all group cursor-pointer duration-150 font-sans"
               >
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div className="flex items-start justify-between">
-                    <h3 className="font-bold text-lg leading-tight text-gray-900 group-hover:text-amber-955 transition-colors">
+                    <h3 className="font-bold text-lg leading-tight text-gray-900 group-hover:text-amber-800 transition-colors">
                       {customer.firstName} {customer.middleInitial ? customer.middleInitial + ' ' : ''}{customer.lastName}
                     </h3>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
                       <StatusBadge status={customer.status} />
                       {customer.leadSourceType && (
-                        <span className="text-[9px] uppercase tracking-wider text-gray-500 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full font-medium">
+                        <span className="text-[9px] uppercase tracking-wider text-gray-500 bg-gray-50 border border-gray-100 px-2.5 py-0.5 rounded-full font-bold">
                           {customer.leadSourceType.replace('-', ' ')}
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className="text-sm text-gray-500 space-y-1.5">
+                  <div className="text-sm text-gray-500 space-y-2 font-medium">
                     {customer.email && <p className="truncate" title={customer.email}>{customer.email}</p>}
                     {customer.phone && (
                       <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -922,28 +919,28 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
                   </div>
 
                   {personalizedText && (
-                    <div className="mt-3 bg-gray-50 border border-gray-100 rounded-lg p-3 flex items-start justify-between gap-3" onClick={(e) => e.stopPropagation()}>
-                      <p className="text-xs text-gray-800 whitespace-pre-wrap flex-1 leading-normal font-sans">
+                    <div className="mt-3 bg-gray-50 border border-gray-100/70 rounded-xl p-3 flex flex-col sm:flex-row sm:items-start justify-between gap-3" onClick={(e) => e.stopPropagation()}>
+                      <p className="text-xs text-gray-700 whitespace-pre-wrap flex-1 leading-relaxed font-sans font-medium">
                         {personalizedText}
                       </p>
                       <CopyButton 
                         value={personalizedText} 
                         label="Copy" 
-                        className="bg-white border border-gray-200 shrink-0 shadow-xs"
+                        className="bg-white border border-gray-200 shrink-0 shadow-xs self-end sm:self-start"
                       />
                     </div>
                   )}
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-gray-50 flex items-center justify-between gap-4">
-                  <div onClick={(e) => e.stopPropagation()} className="bg-neutral-50 border border-gray-150 rounded-xl px-3 py-1.5 transition-colors">
+                <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between gap-4">
+                  <div onClick={(e) => e.stopPropagation()} className="bg-gray-50 hover:bg-gray-100/85 border border-transparent rounded-xl px-3 py-1.5 transition-colors">
                     <TextedCheckbox 
                       customerId={customer.id!}
                       closedKinds={['cadence']}
                       onTexted={onTexted}
                     />
                   </div>
-                  <div className="flex items-center gap-1 text-[10px] text-gray-400 font-semibold uppercase tracking-wider group-hover:text-gray-700 transition-colors">
+                  <div className="flex items-center gap-1 text-[10px] text-gray-400 font-bold uppercase tracking-wider group-hover:text-gray-700 transition-colors">
                     <span>View Profile</span>
                     <ChevronRight size={14} className="text-gray-300 group-hover:text-gray-600 group-hover:translate-x-1 transition-all" />
                   </div>

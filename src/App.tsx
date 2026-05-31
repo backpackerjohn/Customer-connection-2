@@ -772,7 +772,7 @@ export default function App() {
       />
 
       {/* Mobile Nav Bar - Only visible on Dashboard or if we want global nav */}
-      {(view === 'dashboard' || view === 'settings' || view === 'bulk-intake' || view === 'today' || view === 'customers') && (
+      {(view === 'dashboard' || view === 'settings' || view === 'bulk-intake' || view === 'today') && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-8 py-4 flex items-center justify-between z-40">
           <NavIconButton 
             icon={<LayoutDashboard size={24} />} 

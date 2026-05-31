@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Users, ChevronRight, Search, RotateCcw, ChevronDown, ChevronUp, SlidersHorizontal, X, ArrowUpRight, Bookmark } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
+import { MenuButton } from '../components/MenuButton';
+import { SubButton } from '../components/SubButton';
+import { LayoutDashboard, ArrowUpDown, Bell, Sparkles, Settings, LogOut, ArrowDownAZ, Clock, Eye } from 'lucide-react';
 import { Customer } from '../types';
 import { StatusBadge } from '../components/StatusBadge';
 import { InputField } from '../components/InputField';
@@ -62,6 +65,7 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
   const [showFilters, setShowFilters] = React.useState(false);
   const [showUnclassified, setShowUnclassified] = React.useState(false);
   const [pushSuccess, setPushSuccess] = React.useState(false);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
   const handlePushToToday = () => {
     if (typeof window === 'undefined') return;
@@ -951,6 +955,86 @@ export function CustomersView({ customers, notesByCustomer, onNewCustomer, onEdi
           })
         )}
       </div>
+
+      <AnimatePresence>
+        {activeMenu && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setActiveMenu(null)}
+            className="fixed inset-0 z-40 bg-black/5"
+          />
+        )}
+      </AnimatePresence>
+
+      <motion.div 
+        animate={{ height: activeMenu ? '180px' : '90px' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        className="fixed bottom-0 left-0 right-0 md:left-64 bg-white border-t border-gray-200 z-50 flex flex-col overflow-hidden"
+      >
+        {/* Main Buttons */}
+        <div className="px-6 py-4 flex items-center justify-around gap-4 h-[90px] shrink-0 translate-y-0">
+          <MenuButton 
+            icon={<LayoutDashboard size={24} />} 
+            label="Menu" 
+            active={activeMenu === 'logo'} 
+            onClick={() => setActiveMenu(activeMenu === 'logo' ? null : 'logo')} 
+          />
+          <MenuButton 
+            icon={<SlidersHorizontal size={24} />} 
+            label="Filters" 
+            active={false} 
+            onClick={() => {}} 
+          />
+          <MenuButton 
+            icon={<ArrowUpDown size={24} />} 
+            label="Sort" 
+            active={activeMenu === 'sort'} 
+            onClick={() => setActiveMenu(activeMenu === 'sort' ? null : 'sort')} 
+          />
+          <MenuButton 
+            icon={<Plus size={24} />} 
+            label="New" 
+            active={false} 
+            onClick={() => {}} 
+          />
+          <MenuButton 
+            icon={<ArrowUpRight size={24} />} 
+            label="Push" 
+            active={false} 
+            onClick={() => {}} 
+          />
+        </div>
+
+        {/* Sub Buttons Area */}
+        <div className="flex-1 bg-gray-50/50 border-t border-gray-100 flex items-center justify-around px-8">
+          {activeMenu === 'logo' && (
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="flex justify-around w-full"
+            >
+              <SubButton icon={<LayoutDashboard size={20} />} label="Dashboard" />
+              <SubButton icon={<Bell size={20} />} label="Today" />
+              <SubButton icon={<Sparkles size={20} />} label="Bulk Upload" />
+              <SubButton icon={<Settings size={20} />} label="Settings" />
+              <SubButton icon={<LogOut size={20} />} label="Sign Out" />
+            </motion.div>
+          )}
+          {activeMenu === 'sort' && (
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="flex justify-around w-full"
+            >
+              <SubButton icon={<ArrowDownAZ size={20} />} label="Alphabetical" />
+              <SubButton icon={<Clock size={20} />} label="Date Added" />
+              <SubButton icon={<Eye size={20} />} label="Latest Viewed" />
+            </motion.div>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }

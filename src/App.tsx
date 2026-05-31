@@ -44,7 +44,7 @@ import { TodayView } from './views/TodayView';
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'dashboard' | 'profile' | 'settings' | 'bulk-intake' | 'today' | 'customers'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'profile' | 'settings' | 'bulk-intake' | 'today' | 'customers'>('customers');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [notesByCustomer, setNotesByCustomer] = useState<Record<string, string[]>>({});
   const [currentCustomer, setCurrentCustomer] = useState<Customer>(emptyCustomer);

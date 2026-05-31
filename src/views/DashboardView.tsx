@@ -7,11 +7,8 @@ interface Props {
   onEditCustomer: (customer: Customer) => void;
 }
 
-export function DashboardView({ customers, onNewCustomer, onEditCustomer }: Props) {
-  // Reference parameters to satisfy ESLint without executing them
-  if (false as boolean) {
-    console.log(customers, onNewCustomer, onEditCustomer);
-  }
+export function DashboardView(_props: Props) {
+  void _props;
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8">

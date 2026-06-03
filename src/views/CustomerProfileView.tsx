@@ -26,6 +26,7 @@ import { SubButton } from '../components/SubButton';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { ChipSelect } from '../components/ChipSelect';
 import { LeadSourceChips } from '../components/LeadSourceChips';
+import { Toggle } from '../components/Toggle';
 import { CustomerInfoSection } from './profile/CustomerInfoSection';
 import { InsuranceSection } from './profile/InsuranceSection';
 import { NewVehicleSection } from './profile/NewVehicleSection';
@@ -128,6 +129,13 @@ export function CustomerProfileView({
                 ]}
                 onChange={(v) => onUpdateCustomer({ status: v })}
               />
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Working</span>
+                <Toggle 
+                  active={!!currentCustomer.working}
+                  onToggle={() => onUpdateCustomer({ working: !currentCustomer.working })} 
+                />
+              </div>
             </div>
             <div className="flex flex-wrap items-start gap-3">
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest w-24 shrink-0 pt-1">Lead Source</span>

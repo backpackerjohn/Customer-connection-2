@@ -1,10 +1,36 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Sparkles, MessageSquare, User, Camera, Image as ImageIcon, Loader2, Plus } from 'lucide-react';
+import { X, Send, Sparkles, MessageSquare, User, Camera, Image as ImageIcon, Loader2, Plus, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { processCustomerChat, ImageData } from '../services/aiService';
 import { lookupVehicleByStock } from '../services/inventoryService';
 import { normalizeImageForVision } from '../lib/imageNormalizer';
 import { Customer } from '../types';
+
+interface SpeechRecognitionEvent {
+  results: {
+    [index: number]: {
+      [index: number]: {
+        transcript: string;
+      };
+    };
+  };
+}
+
+interface SpeechRecognitionInstance {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onend: () => void;
+  onerror: () => void;
+  start: () => void;
+  stop: () => void;
+}
+
+const SpeechRecognition = typeof window !== 'undefined'
+  ? ((window as unknown as { SpeechRecognition?: new () => SpeechRecognitionInstance; webkitSpeechRecognition?: new () => SpeechRecognitionInstance }).SpeechRecognition ||
+     (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionInstance; webkitSpeechRecognition?: new () => SpeechRecognitionInstance }).webkitSpeechRecognition)
+  : undefined;
 
 interface Message {
   role: 'user' | 'assistant';
@@ -40,8 +66,60 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+
+  const toggleListening = () => {
+    if (!SpeechRecognition || isTyping || isUploading) return;
+
+    if (isListening) {
+      try {
+        recognitionRef.current?.stop();
+      } catch (err) {
+        console.error("Stop error:", err);
+      }
+      setIsListening(false);
+    } else {
+      try {
+        if (!recognitionRef.current) {
+          const recognition = new SpeechRecognition();
+          recognition.lang = 'en-US';
+          recognition.interimResults = false;
+          recognition.continuous = false;
+
+          recognition.onresult = (e: SpeechRecognitionEvent) => {
+            setInput(prev => (prev ? prev + ' ' : '') + e.results[0][0].transcript);
+          };
+          recognition.onend = () => {
+            setIsListening(false);
+          };
+          recognition.onerror = () => {
+            setIsListening(false);
+          };
+          recognitionRef.current = recognition;
+        }
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (err) {
+        console.error("Speech Recognition start error:", err);
+        setIsListening(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -330,11 +408,24 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
                 <input 
                   type="text"
                   placeholder="Tell me about John or upload ID..."
-                  className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 text-sm focus:ring-2 focus:ring-gray-900 outline-none transition-all"
+                  className="w-full bg-gray-50 border-none rounded-2xl px-5 py-4 pr-12 text-sm focus:ring-2 focus:ring-gray-900 outline-none transition-all"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                 />
+                {SpeechRecognition && (
+                  <button
+                    type="button"
+                    onClick={toggleListening}
+                    disabled={isTyping || isUploading}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50"
+                  >
+                    <Mic 
+                      size={18} 
+                      className={isListening ? "text-red-500 animate-pulse" : "text-gray-400 hover:text-gray-600"} 
+                    />
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-3 gap-3">

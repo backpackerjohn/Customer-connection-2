@@ -37,6 +37,7 @@ service cloud.firestore {
         && (data.get('hasTradeIn', false) is bool)
         && (data.get('stillOwe', false) is bool)
         && (data.get('payingCash', false) is bool)
+        && (data.get('working', false) is bool)
 
         // Personal info
         && (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 100))
@@ -156,7 +157,7 @@ service cloud.firestore {
           'tradeValueSource', 'tradeValueCondition',
           'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
           'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
-          'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel'
+          'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working'
         ])
         && incoming().createdAt == request.time
         && (incoming().updatedAt == request.time || !('updatedAt' in incoming()))
@@ -186,7 +187,7 @@ service cloud.firestore {
             'tradeValueSource', 'tradeValueCondition',
             'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
             'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
-            'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel'
+            'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working'
           ])
         )
         && (incoming().get('updatedAt', request.time) == request.time);

@@ -72,6 +72,7 @@ export interface Customer {
     | 'social' | 'fb-marketplace' | 'snap' | 'fb-ads' | 'tiktok'
     | 'showroom' | 'phone' | 'web' | 'other';
   contactChannel?: 'text' | 'crm-text' | 'email' | 'snapchat' | 'facebook';
+  working?: boolean;
   leadGeneratedDate?: string;    // ISO date YYYY-MM-DD, captured by Bulk Intake
   pendingInterestNotes?: string; // free text holding secondary vehicle interests dropped at intake
   createdAt?: FirestoreTimestamp;

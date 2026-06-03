@@ -321,6 +321,18 @@ export default function App() {
     }
   };
 
+  const handleToggleWorking = async (customerId: string, working: boolean) => {
+    if (!user) return;
+    const target = customers.find(c => c.id === customerId);
+    if (!target) return;
+    try {
+      await updateCustomer(customerId, { ...target, working });
+      if (currentCustomer.id === customerId) setCurrentCustomer(prev => ({ ...prev, working }));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `customers/${customerId}`);
+    }
+  };
+
   const handleReschedule = async (customerId: string, dateStr: string, reason: string, mode: 'defer' | 'add' = 'add') => {
     if (!user) return;
 
@@ -686,6 +698,7 @@ export default function App() {
               onTexted={handleTexted}
               onReschedule={handleReschedule}
               onAddNote={handleAddNoteForCustomer}
+              onToggleWorking={handleToggleWorking}
             />
           </motion.div>
         )}

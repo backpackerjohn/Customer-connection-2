@@ -105,11 +105,15 @@ export const DEAL_CHECKLIST_FIELDS: PdfFieldMapping[] = [
   { pdfFieldName: 'NEW Vehicle_VIN', getValue: c => (c.vehicleVin ?? '').toUpperCase() },
 ];
 
-// Privacy Policy — always included in the Sold packet. Template PDF was not
-// supplied for field-name inspection; treat as static legal text for now.
-// If the template has fillable AcroForm fields, enumerate them with pdf-lib
-// (form.getFields()) and add entries here.
-export const PRIVACY_POLICY_FIELDS: PdfFieldMapping[] = [];
+// Privacy Policy — always included in the Sold packet. The template exposes
+// two AcroForm text fields at the bottom for the two "Customer Signature /
+// Date" slots: Deal_Date (left) and Deal_Date_2 (right). Both fill with
+// dealDate (purchaseDate-if-set-else-today, MM/DD/YYYY), matching how every
+// other Sold-packet date field is filled.
+export const PRIVACY_POLICY_FIELDS: PdfFieldMapping[] = [
+  { pdfFieldName: 'Deal_Date', getValue: c => dealDate(c) },
+  { pdfFieldName: 'Deal_Date_2', getValue: c => dealDate(c) },
+];
 
 // Payoff — included only when hasTradeIn && stillOwe.
 // Skipped (no Customer field; dealer fills at closing with lender-provided data):

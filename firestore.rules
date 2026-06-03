@@ -134,6 +134,15 @@ service cloud.firestore {
         && attestedAt.size() <= 30;
     }
 
+    function isValidTodo(data) {
+      return data.get('createdBy', null) == request.auth.uid
+        && data.get('text', '') is string && data.get('text', '').size() <= 2000
+        && data.get('done', false) is bool
+        && (!('customerId' in data) || (data.customerId is string && data.customerId.size() <= 128))
+        && (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 200))
+        && (data.get('completedAt', null) == null || data.completedAt is timestamp);
+    }
+
     // --- Collection Routes ---
     match /customers/{customerId} {
       allow get: if isValidId(customerId) && isOwner(existing());
@@ -215,6 +224,23 @@ service cloud.firestore {
           && incoming().at == request.time;
         allow update, delete: if isValidId(contactId) && isSignedIn() && existing().get('authorId', null) == request.auth.uid;
       }
+    }
+
+    match /todos/{todoId} {
+      allow get: if isValidId(todoId) && isOwner(existing());
+      allow list: if isSignedIn() && resource.data.get('createdBy', null) == request.auth.uid;
+      allow create: if isSignedIn()
+        && isValidId(todoId)
+        && isValidTodo(incoming())
+        && incoming().get('createdBy', null) == request.auth.uid
+        && incoming().keys().hasOnly(['text', 'done', 'customerId', 'customerName', 'createdBy', 'createdAt', 'completedAt'])
+        && incoming().get('createdAt', request.time) == request.time;
+      allow update: if isValidId(todoId)
+        && isOwner(existing())
+        && isOwner(incoming())
+        && isValidTodo(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['text', 'done', 'completedAt']);
+      allow delete: if isValidId(todoId) && isOwner(existing());
     }
 
     match /{path=**}/notes/{noteId} {

@@ -88,6 +88,17 @@ export interface Note {
   createdAt: FirestoreTimestamp;
 }
 
+export interface Todo {
+  id?: string;
+  text: string;
+  done: boolean;
+  customerId?: string;
+  customerName?: string;
+  createdBy?: string;
+  createdAt?: FirestoreTimestamp;
+  completedAt?: FirestoreTimestamp | null;
+}
+
 export const emptyCustomer: Customer = {
   firstName: '',
   middleInitial: '',

@@ -5,7 +5,8 @@ import {
   Settings, 
   LogOut,
   Sparkles,
-  Bell
+  Bell,
+  ListChecks
 } from 'lucide-react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { auth, handleFirestoreError, OperationType } from './lib/firebase';
@@ -15,10 +16,11 @@ import { AIChatOverlay } from './components/AIChatOverlay';
 import { NavItem } from './components/NavItem';
 import { NavIconButton } from './components/NavIconButton';
 
-import { Customer, Note, emptyCustomer } from './types';
+import { Customer, Note, Todo, emptyCustomer } from './types';
 import { createCustomer, updateCustomer, subscribeToCustomers } from './services/customersService';
 import { createNote, subscribeToNotes, subscribeToAllNotes } from './services/notesService';
 import { createContact } from './services/contactsService';
+import { createTodo, subscribeToTodos, setTodoDone, updateTodoText, deleteTodo } from './services/todosService';
 import { ReminderKind, recordContact, computeNextCadenceDue, rollNextCadence } from './lib/reminders/engine';
 import { REMINDER_CONFIG } from './lib/reminders/config';
 import { 
@@ -40,12 +42,14 @@ import { CustomerProfileView } from './views/CustomerProfileView';
 import { SettingsView } from './views/SettingsView';
 import { BulkIntakeView } from './views/BulkIntakeView';
 import { TodayView } from './views/TodayView';
+import { TodoView } from './views/TodoView';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'dashboard' | 'profile' | 'settings' | 'bulk-intake' | 'today' | 'customers'>('customers');
+  const [view, setView] = useState<'dashboard' | 'profile' | 'settings' | 'bulk-intake' | 'today' | 'customers' | 'todos'>('customers');
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [todos, setTodos] = useState<Todo[]>([]);
   const [notesByCustomer, setNotesByCustomer] = useState<Record<string, string[]>>({});
   const [currentCustomer, setCurrentCustomer] = useState<Customer>(emptyCustomer);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -210,9 +214,16 @@ export default function App() {
       (error) => handleFirestoreError(error, OperationType.LIST, 'notes[all]')
     );
 
+    const unsubTodos = subscribeToTodos(
+      user.uid,
+      setTodos,
+      (error) => handleFirestoreError(error, OperationType.LIST, 'todos')
+    );
+
     return () => {
       unsubCustomers();
       unsubNotes();
+      unsubTodos();
     };
   }, [user]);
 
@@ -331,6 +342,44 @@ export default function App() {
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `customers/${customerId}`);
     }
+  };
+
+  const handleAddTodo = async (text: string, customerId?: string, customerName?: string) => {
+    if (!user || !text.trim()) return;
+    try {
+      await createTodo(user.uid, { text: text.trim(), customerId, customerName });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'todos');
+    }
+  };
+
+  const handleToggleTodo = async (todoId: string, done: boolean) => {
+    try {
+      await setTodoDone(todoId, done);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'todos');
+    }
+  };
+
+  const handleEditTodo = async (todoId: string, text: string) => {
+    try {
+      await updateTodoText(todoId, text);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'todos');
+    }
+  };
+
+  const handleDeleteTodo = async (todoId: string) => {
+    try {
+      await deleteTodo(todoId);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'todos');
+    }
+  };
+
+  const handleOpenCustomerFromTodo = (customerId: string) => {
+    const c = customers.find(cust => cust.id === customerId);
+    if (c) handleEditCustomer(c);
   };
 
   const handleReschedule = async (customerId: string, dateStr: string, reason: string, mode: 'defer' | 'add' = 'add') => {
@@ -639,6 +688,12 @@ export default function App() {
             onClick={() => setView('today')}
           />
           <NavItem 
+            icon={<ListChecks size={20} />} 
+            label="To-Do" 
+            active={view === 'todos'} 
+            onClick={() => setView('todos')}
+          />
+          <NavItem 
             icon={<Users size={20} />} 
             label="Customers" 
             active={view === 'customers'}
@@ -718,6 +773,24 @@ export default function App() {
             />
           </motion.div>
         )}
+        {view === 'todos' && (
+          <motion.div
+            key="todos"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+          >
+            <TodoView
+              todos={todos}
+              customers={customers}
+              onAddTodo={handleAddTodo}
+              onToggleTodo={handleToggleTodo}
+              onEditTodo={handleEditTodo}
+              onDeleteTodo={handleDeleteTodo}
+              onOpenCustomer={handleOpenCustomerFromTodo}
+            />
+          </motion.div>
+        )}
         {view === 'profile' && (
           <motion.div
             key="profile"
@@ -785,7 +858,7 @@ export default function App() {
       />
 
       {/* Mobile Nav Bar - Only visible on Dashboard or if we want global nav */}
-      {(view === 'dashboard' || view === 'settings' || view === 'bulk-intake' || view === 'today') && (
+      {(view === 'dashboard' || view === 'settings' || view === 'bulk-intake' || view === 'today' || view === 'todos') && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-8 py-4 flex items-center justify-between z-40">
           <NavIconButton 
             icon={<LayoutDashboard size={24} />} 
@@ -796,6 +869,11 @@ export default function App() {
             icon={<Bell size={24} />} 
             active={view === 'today'} 
             onClick={() => setView('today')}
+          />
+          <NavIconButton 
+            icon={<ListChecks size={24} />} 
+            active={view === 'todos'} 
+            onClick={() => setView('todos')}
           />
           <NavIconButton 
             icon={<Users size={24} />} 

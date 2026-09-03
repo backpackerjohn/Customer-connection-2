@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Customer } from "../types";
 import { toISODate } from '../lib/dateNormalizer';
+import { CaptureIntent, INTENT_FIELDS, filterByIntent } from '../lib/captureIntent';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
@@ -11,6 +12,8 @@ export interface ChatResponse {
   hasGoodNotes: boolean;
   notesSummary?: string;
   documentType?: 'license' | 'insurance' | 'window_sticker' | 'other';
+  unreadFields?: string[];
+  insuredVehicle?: { year?: string; make?: string; model?: string; vin?: string };
 }
 
 export interface ImageData {
@@ -22,19 +25,140 @@ export interface ImageData {
 
 import { timed } from '../lib/timing';
 
+type ScopedIntent = Exclude<CaptureIntent, 'other'>;
+
+const INTENT_FIELD_DOCS: Record<ScopedIntent, string> = {
+  trade: `    - tradeYear: Trade-in vehicle model year
+    - tradeMake: Trade-in vehicle make
+    - tradeModel: Trade-in vehicle model
+    - tradeTrim: Trade-in vehicle trim level
+    - tradeMileage: Trade-in vehicle mileage/odometer reading
+    - tradeVin: Trade-in vehicle VIN
+    - hasTradeIn: Set true when any trade-in detail is found`,
+  vehicle: `    - vehicleStock: Dealer stock number
+    - vehicleYear: Vehicle model year
+    - vehicleMake: Vehicle make
+    - vehicleModel: Vehicle model
+    - vehicleVin: Vehicle VIN
+    - vehicleMiles: Vehicle mileage/odometer reading`,
+  insurance: `    - insuranceCompany: Insurance company name
+    - agentName: Insurance agent name`,
+  license: `    - firstName: First name
+    - middleInitial: Middle initial (single character if possible)
+    - lastName: Last name
+    - dob: Date of birth (format: YYYY-MM-DD, ISO 8601)
+    - address: Street address
+    - city: City
+    - state: State code (2-letter)
+    - zip: Zip code
+    - dlNumber: Driver's license number
+    - dlState: License state (2-letter)
+    - dlExpiration: License expiration date (format: YYYY-MM-DD, ISO 8601)`,
+};
+
+const INTENT_CONTEXT: Record<ScopedIntent, string> = {
+  trade: "the customer's TRADE-IN vehicle (a VIN sticker, door jamb label, registration, odometer, or a description of the vehicle they are giving up)",
+  vehicle: "the NEW VEHICLE the customer wants to buy (a window sticker, VIN sticker, stock tag, or a description of the vehicle of interest)",
+  insurance: "the customer's INSURANCE CARD",
+  license: "the customer's DRIVER'S LICENSE",
+};
+
+const INTENT_EXTRAS: Record<ScopedIntent, string> = {
+  trade: '',
+  vehicle: `    6. If a dealer stock number is found, also put it in 'inventoryStockFound'.`,
+  insurance: `    6. The insured vehicle(s) printed on the card do NOT belong in updatedFields. Put the primary insured vehicle's year, make, model, and VIN into 'insuredVehicle' instead. If several vehicles are listed, use the first one.`,
+  license: '',
+};
+
+function buildScopedSystemInstruction(intent: ScopedIntent): string {
+  return `
+    You are an expert data extraction assistant for a car dealership CRM.
+    The user is capturing ${INTENT_CONTEXT[intent]} for a customer profile.
+    Extract ONLY the fields listed below. Ignore every other detail in the input or image, even when it is clearly legible — names, other vehicles, policy numbers, and anything else outside this list must NOT be emitted.
+
+    EXTRACT THESE FIELDS (use these exact keys):
+${INTENT_FIELD_DOCS[intent]}
+
+    RULES:
+    1. Return your best reading even when you are not fully certain. Never invent data that is not present.
+    2. DATA FORMATTING (CRITICAL):
+       - Date fields: YYYY-MM-DD (ISO 8601). Do NOT use MM/DD/YYYY or any other format.
+       - VIN & Stock Numbers: ALL UPPERCASE.
+       - Name, Address & City fields: Proper Title Case.
+       - State fields: 2-letter uppercase code.
+    3. When an image is provided, perform full OCR and emit EVERY listed field you can read — do not stop after the first 2-3 fields.
+    4. If a listed field is visible on the document but too blurry or damaged to read, add its human-readable name (e.g. "mileage") to 'unreadFields' instead of guessing.
+    5. Always return a 'message' field summarizing what you extracted.
+${INTENT_EXTRAS[intent]}
+  `;
+}
+
+const BOOLEAN_INTENT_FIELDS = new Set(['hasTradeIn']);
+
+function buildScopedResponseSchema(intent: ScopedIntent) {
+  const fieldProps: Record<string, { type: Type }> = {};
+  for (const f of INTENT_FIELDS[intent]) {
+    fieldProps[f] = { type: BOOLEAN_INTENT_FIELDS.has(f) ? Type.BOOLEAN : Type.STRING };
+  }
+
+  const properties: Record<string, unknown> = {
+    updatedFields: {
+      type: Type.OBJECT,
+      properties: fieldProps,
+      propertyOrdering: [...INTENT_FIELDS[intent]],
+    },
+    message: { type: Type.STRING },
+    unreadFields: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: "Human-readable names of listed fields that are visible but unreadable.",
+    },
+  };
+  const propertyOrdering = ['updatedFields', 'message', 'unreadFields'];
+
+  if (intent === 'vehicle') {
+    properties.inventoryStockFound = {
+      type: Type.STRING,
+      description: "If a vehicle stock number is found in the text or image, put it here.",
+    };
+    propertyOrdering.push('inventoryStockFound');
+  }
+  if (intent === 'insurance') {
+    properties.insuredVehicle = {
+      type: Type.OBJECT,
+      properties: {
+        year: { type: Type.STRING },
+        make: { type: Type.STRING },
+        model: { type: Type.STRING },
+        vin: { type: Type.STRING },
+      },
+      propertyOrdering: ['year', 'make', 'model', 'vin'],
+    };
+    propertyOrdering.push('insuredVehicle');
+  }
+
+  return {
+    type: Type.OBJECT,
+    properties,
+    propertyOrdering,
+    required: ['updatedFields', 'message'],
+  };
+}
+
 export async function processCustomerChat(
   userInput: string,
   currentData: Partial<Customer>,
   chatHistory: { role: 'user' | 'model', parts: { text: string }[] }[],
-  image?: ImageData
+  image?: ImageData,
+  intent: CaptureIntent = 'other'
 ): Promise<ChatResponse> {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not set");
   }
 
-  const currentDataBlock = `\n\nCURRENT PROFILE STATE (for context — do not re-emit values that are already correct, but DO emit corrections or additions):\n${JSON.stringify(currentData ?? {}, null, 2)}`;
+  const currentDataBlock = `\n\nCURRENT PROFILE STATE (for context — emit corrections and additions as needed):\n${JSON.stringify(currentData ?? {}, null, 2)}`;
 
-  const systemInstruction = `
+  const systemInstruction = intent !== 'other' ? buildScopedSystemInstruction(intent) : `
     You are an expert data extraction assistant for a car dealership CRM.
     Your task is to take natural language input OR images (like driver's licenses, insurance cards, or vehicle VIN stickers) and map them to specific database fields.
 
@@ -104,7 +228,7 @@ export async function processCustomerChat(
           systemInstruction,
           temperature: 0,
           responseMimeType: "application/json",
-          responseSchema: {
+          responseSchema: intent !== 'other' ? buildScopedResponseSchema(intent) : {
             type: Type.OBJECT,
             properties: {
               updatedFields: { 
@@ -180,6 +304,16 @@ export async function processCustomerChat(
 
     const resultText = response.text || '{}';
     const parsedResult = JSON.parse(resultText);
+
+    if (intent !== 'other') {
+      // Belt-and-braces guard: the scoped schema already limits what the model
+      // can emit, but drop anything outside the intent's whitelist regardless.
+      parsedResult.updatedFields = filterByIntent(parsedResult.updatedFields ?? {}, intent);
+      parsedResult.hasGoodNotes = false;
+      delete parsedResult.notesSummary;
+      if (image && intent === 'license') parsedResult.documentType = 'license';
+      if (image && intent === 'insurance') parsedResult.documentType = 'insurance';
+    }
 
     if (parsedResult.updatedFields?.dob) {
       const iso = toISODate(parsedResult.updatedFields.dob);

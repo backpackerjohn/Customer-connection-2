@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users } from 'lucide-react';
+import { Users, Camera } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Customer } from '../../types';
 import { InputField } from '../../components/InputField';
@@ -24,9 +24,10 @@ interface Props {
   ) => void;
   isEstimatingTradeValue: boolean;
   valuationError: string | null;
+  onCapture?: () => void;
 }
 
-export function TradeInSection({ customer, onChange, onTradeEstimate, isEstimatingTradeValue, valuationError }: Props) {
+export function TradeInSection({ customer, onChange, onTradeEstimate, isEstimatingTradeValue, valuationError, onCapture }: Props) {
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-2 px-2">
@@ -34,6 +35,16 @@ export function TradeInSection({ customer, onChange, onTradeEstimate, isEstimati
           <Users size={18} />
         </div>
         <h2 className="text-xl font-bold">Trade-in</h2>
+        {onCapture && (
+          <button
+            type="button"
+            onClick={onCapture}
+            className="ml-auto p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors"
+            aria-label="Snap trade-in photo"
+          >
+            <Camera size={16} />
+          </button>
+        )}
       </div>
       <div className="card p-6 space-y-6">
         <div className="flex items-center justify-between py-2">

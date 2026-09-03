@@ -1,14 +1,15 @@
 import React from 'react';
-import { CarFront } from 'lucide-react';
+import { CarFront, Camera } from 'lucide-react';
 import { Customer } from '../../types';
 import { InputField } from '../../components/InputField';
 
 interface Props {
   customer: Customer;
   onChange: (patch: Partial<Customer>) => void;
+  onCapture?: () => void;
 }
 
-export function NewVehicleSection({ customer, onChange }: Props) {
+export function NewVehicleSection({ customer, onChange, onCapture }: Props) {
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-2 px-2">
@@ -16,6 +17,16 @@ export function NewVehicleSection({ customer, onChange }: Props) {
           <CarFront size={18} />
         </div>
         <h2 className="text-xl font-bold">New Vehicle</h2>
+        {onCapture && (
+          <button
+            type="button"
+            onClick={onCapture}
+            className="ml-auto p-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors"
+            aria-label="Snap vehicle photo"
+          >
+            <Camera size={16} />
+          </button>
+        )}
       </div>
       <div className="card p-6 space-y-6">
         <div className="grid grid-cols-2 gap-4">

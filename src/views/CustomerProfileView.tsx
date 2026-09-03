@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Customer, Note } from '../types';
+import { CaptureIntent } from '../lib/captureIntent';
 import { SaveStatusIndicator } from '../components/SaveStatusIndicator';
 import { MenuButton } from '../components/MenuButton';
 import { SubButton } from '../components/SubButton';
@@ -67,6 +68,7 @@ interface Props {
     options?: { skipCache?: boolean }
   ) => void;
   onReschedule: (customerId: string, date: string, reason: string) => void;
+  onCaptureForSection: (intent: CaptureIntent) => void;
 }
 
 export function CustomerProfileView({
@@ -91,7 +93,8 @@ export function CustomerProfileView({
   onTestDrive,
   onSold,
   onReschedule,
-  onTradeEstimate
+  onTradeEstimate,
+  onCaptureForSection
 }: Props) {
   return (
     <div className="max-w-2xl mx-auto">
@@ -165,15 +168,16 @@ export function CustomerProfileView({
             </div>
           </div>
         </div>
-        <CustomerInfoSection customer={currentCustomer} onChange={onUpdateCustomer} />
-        <InsuranceSection customer={currentCustomer} onChange={onUpdateCustomer} />
-        <NewVehicleSection customer={currentCustomer} onChange={onUpdateCustomer} />
-        <TradeInSection 
-          customer={currentCustomer} 
-          onChange={onUpdateCustomer} 
+        <CustomerInfoSection customer={currentCustomer} onChange={onUpdateCustomer} onCapture={() => onCaptureForSection('license')} />
+        <InsuranceSection customer={currentCustomer} onChange={onUpdateCustomer} onCapture={() => onCaptureForSection('insurance')} />
+        <NewVehicleSection customer={currentCustomer} onChange={onUpdateCustomer} onCapture={() => onCaptureForSection('vehicle')} />
+        <TradeInSection
+          customer={currentCustomer}
+          onChange={onUpdateCustomer}
           onTradeEstimate={onTradeEstimate}
           isEstimatingTradeValue={isEstimatingTradeValue}
           valuationError={valuationError}
+          onCapture={() => onCaptureForSection('trade')}
         />
         <GoalsSection customer={currentCustomer} onChange={onUpdateCustomer} />
         <TimelineNotesSection 

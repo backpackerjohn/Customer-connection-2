@@ -5,6 +5,16 @@ import { processCustomerChat, ImageData } from '../services/aiService';
 import { lookupVehicleByStock } from '../services/inventoryService';
 import { normalizeImageForVision } from '../lib/imageNormalizer';
 import { Customer } from '../types';
+import { CaptureIntent } from '../lib/captureIntent';
+
+const INTENT_LABELS: Record<Exclude<CaptureIntent, 'other'>, string> = {
+  trade: 'Trade-in',
+  vehicle: 'New vehicle',
+  license: 'License',
+  insurance: 'Insurance',
+};
+
+const INTENT_CHIP_ORDER = ['trade', 'vehicle', 'license', 'insurance'] as const;
 
 interface SpeechRecognitionEvent {
   results: {
@@ -48,17 +58,21 @@ interface AIChatOverlayProps {
   onClose: () => void;
   currentCustomer: Customer;
   onFieldsExtracted: (
-    fields: Record<string, unknown>, 
+    fields: Record<string, unknown>,
     notesSummary?: string,
     image?: { type: 'license' | 'insurance', file: File }
   ) => void;
+  initialIntent?: CaptureIntent;
+  autoOpenCamera?: boolean;
 }
 
-export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({ 
-  isOpen, 
-  onClose, 
-  currentCustomer, 
-  onFieldsExtracted 
+export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
+  isOpen,
+  onClose,
+  currentCustomer,
+  onFieldsExtracted,
+  initialIntent,
+  autoOpenCamera
 }) => {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: "Hi! I'm your AI assistant. Tell me anything about the customer, or snap a photo of their ID/Insurance, and I'll fill out the fields for you." }
@@ -67,6 +81,9 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
+  const [pendingIntent, setPendingIntent] = useState<CaptureIntent>('other');
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
@@ -127,12 +144,47 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
     }
   }, [messages, isTyping]);
 
-  const handleSend = async (imageFile?: File) => {
-    if ((!input.trim() && !imageFile) || isTyping || isUploading) return;
+  // Reset the pending attachment whenever the overlay (re)opens, adopting the
+  // intent it was opened with. Render-time adjustment instead of an effect.
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen) {
+      setPendingImage(null);
+      setPendingPreview(null);
+      setPendingIntent(initialIntent ?? 'other');
+    }
+  }
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (autoOpenCamera && initialIntent && initialIntent !== 'other') {
+      fileInputRef.current?.setAttribute('capture', 'environment');
+      fileInputRef.current?.click();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  const attachImage = (file: File) => {
+    setPendingImage(file);
+    fileToBase64(file).then(setPendingPreview).catch(() => setPendingPreview(null));
+  };
+
+  const discardPendingImage = () => {
+    setPendingImage(null);
+    setPendingPreview(null);
+    setPendingIntent(initialIntent ?? 'other');
+  };
+
+  const handleSend = async () => {
+    if ((!input.trim() && !pendingImage) || isTyping || isUploading) return;
 
     const userMessage = input.trim();
+    const imageFile = pendingImage ?? undefined;
+    const intent = pendingIntent;
     setInput('');
-    
+    discardPendingImage();
+
     let imageData: ImageData | undefined;
     let imagePreview: string | undefined;
 
@@ -174,10 +226,10 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
         parts: [{ text: m.content }]
       }));
 
-      const response = await processCustomerChat(userMessage || "Extracted from image", currentCustomer, history, imageData);
-      
+      const response = await processCustomerChat(userMessage || "Extracted from image", currentCustomer, history, imageData, intent);
+
       let finalMessage = response.message;
-      let suggestionData: { label: string; data: Record<string, unknown> } | null = null;
+      let suggestionData: { label: string; data: Record<string, unknown>; confirmMessage: string } | null = null;
 
       // Handle Inventory Lookup if stock found
       if (response.inventoryStockFound) {
@@ -198,20 +250,45 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
               vehicleMake: vehicle.make,
               vehicleModel: vehicle.model,
               vehicleVin: vehicle.vin
-            }
+            },
+            confirmMessage: "✅ Vehicle added to profile!"
           };
         }
       }
 
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
+      // Insurance cards list the insured vehicle — offer it as the trade-in.
+      // Nothing is written unless the rep taps the chip.
+      if (intent === 'insurance' && response.insuredVehicle) {
+        const { year, make, model, vin } = response.insuredVehicle;
+        if (year || make || model) {
+          const desc = [year, make, model].filter(Boolean).join(' ');
+          suggestionData = {
+            label: `Add ${desc} as trade?`,
+            data: {
+              hasTradeIn: true,
+              ...(year ? { tradeYear: year } : {}),
+              ...(make ? { tradeMake: make } : {}),
+              ...(model ? { tradeModel: model } : {}),
+              ...(vin ? { tradeVin: vin } : {})
+            },
+            confirmMessage: "✅ Trade-in added to profile!"
+          };
+        }
+      }
+
+      if (response.unreadFields && response.unreadFields.length > 0) {
+        finalMessage += `\n\nCouldn't read: ${response.unreadFields.join(', ')} — please add manually.`;
+      }
+
+      setMessages(prev => [...prev, {
+        role: 'assistant',
         content: finalMessage,
         suggestion: suggestionData ? {
           label: suggestionData.label,
           data: suggestionData.data,
           action: () => {
             onFieldsExtracted(suggestionData.data);
-            setMessages(p => [...p, { role: 'assistant', content: "✅ Vehicle added to profile!" }]);
+            setMessages(p => [...p, { role: 'assistant', content: suggestionData.confirmMessage }]);
           }
         } : undefined
       }]);
@@ -261,8 +338,9 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      handleSend(file);
+      attachImage(file);
     }
+    e.target.value = '';
   };
 
   useEffect(() => {
@@ -277,7 +355,7 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
           const file = item.getAsFile();
           if (file) {
             e.preventDefault();
-            handleSend(file);
+            attachImage(file);
             break;
           }
         }
@@ -401,9 +479,51 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
                 onChange={onFileChange} 
                 accept="image/*" 
                 capture="environment"
-                className="hidden" 
+                className="hidden"
               />
-              
+
+              {pendingImage && (
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-2xl">
+                  {pendingPreview ? (
+                    <img src={pendingPreview} alt="Attached" className="w-14 h-14 rounded-xl object-cover shrink-0" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-xl bg-gray-200 shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0 self-center">
+                    {initialIntent && initialIntent !== 'other' && pendingIntent !== 'other' ? (
+                      <span className="text-xs font-bold text-gray-600">
+                        {INTENT_LABELS[pendingIntent]} photo
+                      </span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {INTENT_CHIP_ORDER.map(k => (
+                          <button
+                            key={k}
+                            type="button"
+                            onClick={() => setPendingIntent(prev => prev === k ? 'other' : k)}
+                            className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                              pendingIntent === k
+                                ? 'bg-gray-900 text-white'
+                                : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            {INTENT_LABELS[k]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={discardPendingImage}
+                    className="p-1.5 hover:bg-gray-200 rounded-full transition-colors shrink-0"
+                    aria-label="Discard photo"
+                  >
+                    <X size={16} className="text-gray-400" />
+                  </button>
+                </div>
+              )}
+
               <div className="relative">
                 <input 
                   type="text"
@@ -453,9 +573,9 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
                   <Camera size={20} />
                   Camera
                 </button>
-                <button 
+                <button
                   onClick={() => handleSend()}
-                  disabled={(!input.trim() && !isUploading) || isTyping}
+                  disabled={(!input.trim() && !pendingImage) || isTyping || isUploading}
                   className="flex flex-col items-center justify-center gap-1.5 p-3 bg-gray-900 text-white rounded-2xl active:scale-95 disabled:opacity-50 transition-all font-bold text-[10px] uppercase tracking-wider"
                 >
                   {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}

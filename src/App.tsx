@@ -13,6 +13,7 @@ import { auth, handleFirestoreError, OperationType } from './lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 
 import { AIChatOverlay } from './components/AIChatOverlay';
+import { CaptureIntent } from './lib/captureIntent';
 import { NavItem } from './components/NavItem';
 import { NavIconButton } from './components/NavIconButton';
 
@@ -58,6 +59,7 @@ export default function App() {
   const [isDirty, setIsDirty] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [aiOverlayIntent, setAiOverlayIntent] = useState<CaptureIntent | null>(null);
   const [isGeneratingPacket, setIsGeneratingPacket] = useState(false);
   const [isGeneratingSoldPacket, setIsGeneratingSoldPacket] = useState(false);
   const [isEstimatingTradeValue, setIsEstimatingTradeValue] = useState(false);
@@ -624,6 +626,11 @@ export default function App() {
     }
   };
 
+  const handleCaptureForSection = (intent: CaptureIntent) => {
+    setAiOverlayIntent(intent);
+    setIsChatOpen(true);
+  };
+
   const handleAIFieldsExtracted = (
     fields: Record<string, unknown>, 
     notesSummary?: string,
@@ -821,6 +828,7 @@ export default function App() {
               onSold={handleSold}
               onTradeEstimate={handleTradeEstimate}
               onReschedule={handleReschedule}
+              onCaptureForSection={handleCaptureForSection}
             />
           </motion.div>
         )}
@@ -850,11 +858,16 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <AIChatOverlay 
-        isOpen={isChatOpen} 
-        onClose={() => setIsChatOpen(false)}
+      <AIChatOverlay
+        isOpen={isChatOpen}
+        onClose={() => {
+          setIsChatOpen(false);
+          setAiOverlayIntent(null);
+        }}
         currentCustomer={currentCustomer}
         onFieldsExtracted={handleAIFieldsExtracted}
+        initialIntent={aiOverlayIntent ?? 'other'}
+        autoOpenCamera={!!aiOverlayIntent}
       />
 
       {/* Mobile Nav Bar - Only visible on Dashboard or if we want global nav */}

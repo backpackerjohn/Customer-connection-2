@@ -63,7 +63,7 @@ interface AIChatOverlayProps {
     image?: { type: 'license' | 'insurance', file: File }
   ) => void;
   initialIntent?: CaptureIntent;
-  autoOpenCamera?: boolean;
+  autoOpenPicker?: boolean;
 }
 
 export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
@@ -72,7 +72,7 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
   currentCustomer,
   onFieldsExtracted,
   initialIntent,
-  autoOpenCamera
+  autoOpenPicker
 }) => {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: "Hi! I'm your AI assistant. Tell me anything about the customer, or snap a photo of their ID/Insurance, and I'll fill out the fields for you." }
@@ -158,8 +158,10 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-    if (autoOpenCamera && initialIntent && initialIntent !== 'other') {
-      fileInputRef.current?.setAttribute('capture', 'environment');
+    if (autoOpenPicker && initialIntent && initialIntent !== 'other') {
+      // Open the native picker WITHOUT the capture attribute so phones offer
+      // both "Take Photo" and "Photo Library" instead of forcing the camera.
+      fileInputRef.current?.removeAttribute('capture');
       fileInputRef.current?.click();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

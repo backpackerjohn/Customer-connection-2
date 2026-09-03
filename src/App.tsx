@@ -867,7 +867,7 @@ export default function App() {
         currentCustomer={currentCustomer}
         onFieldsExtracted={handleAIFieldsExtracted}
         initialIntent={aiOverlayIntent ?? 'other'}
-        autoOpenCamera={!!aiOverlayIntent}
+        autoOpenPicker={!!aiOverlayIntent}
       />
 
       {/* Mobile Nav Bar - Only visible on Dashboard or if we want global nav */}

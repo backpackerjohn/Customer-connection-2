@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterByIntent, INTENT_FIELDS } from './captureIntent';
+import { filterByIntent, INTENT_FIELDS, intentFromDocumentType, VEHICLE_PHOTO_FIELDS } from './captureIntent';
 
 describe('filterByIntent', () => {
   it('insurance intent keeps only insurance fields and drops vehicleVin / lastName', () => {
@@ -83,5 +83,31 @@ describe('filterByIntent', () => {
     for (const intent of Object.keys(INTENT_FIELDS) as (keyof typeof INTENT_FIELDS)[]) {
       expect(filterByIntent({}, intent)).toEqual({});
     }
+  });
+});
+
+describe('intentFromDocumentType', () => {
+  it('maps clear document types onto whitelists', () => {
+    expect(intentFromDocumentType('license')).toBe('license');
+    expect(intentFromDocumentType('insurance')).toBe('insurance');
+    expect(intentFromDocumentType('trade_vehicle')).toBe('trade');
+    expect(intentFromDocumentType('new_vehicle')).toBe('vehicle');
+    expect(intentFromDocumentType('window_sticker')).toBe('vehicle');
+  });
+
+  it('returns null for an ambiguous vehicle photo so the chat can ask', () => {
+    expect(intentFromDocumentType('vehicle')).toBeNull();
+  });
+
+  it('falls back to other (passthrough) for unknown or missing types', () => {
+    expect(intentFromDocumentType('other')).toBe('other');
+    expect(intentFromDocumentType(undefined)).toBe('other');
+    expect(intentFromDocumentType('receipt')).toBe('other');
+  });
+
+  it('VEHICLE_PHOTO_FIELDS covers both sections', () => {
+    expect(VEHICLE_PHOTO_FIELDS).toContain('vehicleVin');
+    expect(VEHICLE_PHOTO_FIELDS).toContain('tradeVin');
+    expect(VEHICLE_PHOTO_FIELDS).toContain('hasTradeIn');
   });
 });

@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Customer } from "../types";
 import { toISODate } from '../lib/dateNormalizer';
-import { CaptureIntent, INTENT_FIELDS, filterByIntent } from '../lib/captureIntent';
+import { CaptureIntent, DocumentType, DOCUMENT_TYPES, INTENT_FIELDS, VEHICLE_PHOTO_FIELDS, filterByIntent, intentFromDocumentType } from '../lib/captureIntent';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
@@ -11,9 +11,38 @@ export interface ChatResponse {
   message: string;
   hasGoodNotes: boolean;
   notesSummary?: string;
-  documentType?: 'license' | 'insurance' | 'window_sticker' | 'other';
+  documentType?: DocumentType;
   unreadFields?: string[];
   insuredVehicle?: { year?: string; make?: string; model?: string; vin?: string };
+  /** Which whitelist was applied to a photo sent without a chip. Undefined for text-only or ambiguous. */
+  appliedIntent?: CaptureIntent;
+  /** A vehicle photo where nobody said trade vs new: fields are held here, not in updatedFields, until the dealer answers. */
+  pendingVehicle?: { year?: string; make?: string; model?: string; trim?: string; vin?: string; miles?: string; stock?: string };
+}
+
+/** Move vehicle data emitted under one section's keys to the other section's keys (only into empty slots). */
+const VEHICLE_KEY_PAIRS: [vehicle: string, trade: string][] = [
+  ['vehicleYear', 'tradeYear'], ['vehicleMake', 'tradeMake'], ['vehicleModel', 'tradeModel'],
+  ['vehicleVin', 'tradeVin'], ['vehicleMiles', 'tradeMileage'],
+];
+function remapVehicleKeys(fields: Record<string, unknown>, to: 'trade' | 'vehicle'): Record<string, unknown> {
+  const out = { ...fields };
+  for (const [v, t] of VEHICLE_KEY_PAIRS) {
+    const [from, dest] = to === 'trade' ? [v, t] : [t, v];
+    if (out[from] !== undefined && out[from] !== null && String(out[from]).trim() !== '' && (out[dest] === undefined || out[dest] === null || String(out[dest]).trim() === '')) {
+      out[dest] = out[from];
+    }
+    delete out[from];
+  }
+  return out;
+}
+function holdVehicle(fields: Record<string, unknown>): ChatResponse['pendingVehicle'] {
+  const pick = (...keys: string[]) => { for (const k of keys) { const v = fields[k]; if (v !== undefined && v !== null && String(v).trim() !== '') return String(v); } return undefined; };
+  const held = {
+    year: pick('vehicleYear', 'tradeYear'), make: pick('vehicleMake', 'tradeMake'), model: pick('vehicleModel', 'tradeModel'),
+    trim: pick('tradeTrim'), vin: pick('vehicleVin', 'tradeVin'), miles: pick('vehicleMiles', 'tradeMileage'), stock: pick('vehicleStock'),
+  };
+  return Object.fromEntries(Object.entries(held).filter(([, v]) => v !== undefined));
 }
 
 export interface ImageData {
@@ -207,7 +236,15 @@ export async function processCustomerChat(
     4. When an image is provided, perform full OCR and emit EVERY field you can read from it — do not stop after the first 2-3 fields.
     5. Always return a 'message' field summarizing what you did (e.g., "I've extracted John's info from his driver's license").
     6. Only set hasGoodNotes true for facts about the car-buying relationship — payment/budget goals, trade intentions, objections, timeline, vehicle preferences, or family/usage needs. Ignore incidental document text such as amounts paid, policy numbers, barcodes, or data already captured in a structured field. If nothing deal-relevant is present, omit the note.
-    7. When an image is provided, set 'documentType' to one of: 'license' (driver's license), 'insurance' (insurance ID card), 'window_sticker' (vehicle Monroney sticker / dealer addendum), or 'other'. When no image is provided, omit documentType.
+    7. When an image is provided, CLASSIFY it in 'documentType':
+       - 'license' (driver's license), 'insurance' (insurance ID card), 'window_sticker' (Monroney sticker / dealer addendum on a vehicle for sale)
+       - 'trade_vehicle' when the photo shows the customer's CURRENT vehicle (VIN label, registration, odometer, the car itself) AND the dealer's words make that clear (e.g. "his trade", "what she drives now", "current car")
+       - 'new_vehicle' when the photo shows a vehicle the customer wants to BUY and the dealer's words make that clear (e.g. "the one she wants", "stock tag", "new car")
+       - 'vehicle' when the photo shows a vehicle or VIN and NOTHING in the dealer's words says whether it is the trade or the purchase. Do not guess.
+       - 'other' for anything else (loan statement, note, unknown paper)
+       The dealer's words ALWAYS win over what the photo looks like. When no image is provided, omit documentType.
+       Put the fields under the matching keys: trade_vehicle -> trade*, new_vehicle/window_sticker -> vehicle*. For 'vehicle' use vehicle* keys; they will be moved after the dealer answers.
+    8. If the image is an insurance card, the insured vehicle(s) do NOT belong in updatedFields. Put the primary insured vehicle's year, make, model, and VIN into 'insuredVehicle' instead.
     ${currentDataBlock}
   `;
 
@@ -290,12 +327,17 @@ export async function processCustomerChat(
               message: { type: Type.STRING },
               hasGoodNotes: { type: Type.BOOLEAN },
               notesSummary: { type: Type.STRING },
-              documentType: { 
-                type: Type.STRING, 
-                enum: ['license', 'insurance', 'window_sticker', 'other'] 
+              documentType: {
+                type: Type.STRING,
+                enum: [...DOCUMENT_TYPES]
+              },
+              insuredVehicle: {
+                type: Type.OBJECT,
+                properties: { year: { type: Type.STRING }, make: { type: Type.STRING }, model: { type: Type.STRING }, vin: { type: Type.STRING } },
+                propertyOrdering: ['year', 'make', 'model', 'vin']
               }
             },
-            propertyOrdering: ["updatedFields", "inventoryStockFound", "message", "hasGoodNotes", "notesSummary", "documentType"],
+            propertyOrdering: ["updatedFields", "inventoryStockFound", "message", "hasGoodNotes", "notesSummary", "documentType", "insuredVehicle"],
             required: ["updatedFields", "message", "hasGoodNotes"]
           }
         }
@@ -313,6 +355,9 @@ export async function processCustomerChat(
       delete parsedResult.notesSummary;
       if (image && intent === 'license') parsedResult.documentType = 'license';
       if (image && intent === 'insurance') parsedResult.documentType = 'insurance';
+      if (image && intent === 'trade') parsedResult.documentType = 'trade_vehicle';
+      if (image && intent === 'vehicle') parsedResult.documentType = 'new_vehicle';
+      parsedResult.appliedIntent = intent;
     }
 
     if (parsedResult.updatedFields?.dob) {
@@ -331,6 +376,28 @@ export async function processCustomerChat(
       else delete parsedResult.updatedFields.purchaseDate;
     }
 
+    // Photo sent without a chip: route by what the model said it is. The prompt
+    // makes the dealer's words win, so "here's his trade" lands in trade* even if
+    // the photo alone looks like any other VIN label.
+    if (intent === 'other' && image) {
+      const routed = intentFromDocumentType(parsedResult.documentType);
+      let fields = (parsedResult.updatedFields ?? {}) as Record<string, unknown>;
+      if (routed === null) {
+        // Ambiguous vehicle photo: hold everything, write nothing. The chat asks.
+        const vehicleOnly = Object.fromEntries(Object.entries(fields).filter(([k]) => VEHICLE_PHOTO_FIELDS.includes(k)));
+        parsedResult.pendingVehicle = holdVehicle(vehicleOnly);
+        parsedResult.updatedFields = {};
+        delete parsedResult.inventoryStockFound;
+      } else if (routed !== 'other') {
+        if (routed === 'trade' || routed === 'vehicle') fields = remapVehicleKeys(fields, routed);
+        parsedResult.updatedFields = filterByIntent(fields, routed);
+        parsedResult.appliedIntent = routed;
+        if (routed !== 'vehicle') delete parsedResult.inventoryStockFound;
+      } else {
+        parsedResult.appliedIntent = 'other';
+      }
+    }
+
     const uf = parsedResult.updatedFields as Record<string, unknown> | undefined;
     if (uf) {
       const hasValue = (k: string) => {
@@ -346,7 +413,10 @@ export async function processCustomerChat(
     if (
       parsedResult.documentType === 'license' ||
       parsedResult.documentType === 'insurance' ||
-      parsedResult.documentType === 'window_sticker'
+      parsedResult.documentType === 'window_sticker' ||
+      parsedResult.documentType === 'trade_vehicle' ||
+      parsedResult.documentType === 'new_vehicle' ||
+      parsedResult.documentType === 'vehicle'
     ) {
       parsedResult.hasGoodNotes = false;
       delete parsedResult.notesSummary;

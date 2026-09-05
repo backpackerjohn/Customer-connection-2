@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, MessageSquare, User, Camera, Image as ImageIcon, Loader2, Plus, Mic } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { processCustomerChat, ImageData } from '../services/aiService';
+import { processCustomerChat, ImageData, ChatResponse } from '../services/aiService';
 import { lookupVehicleByStock } from '../services/inventoryService';
 import { normalizeImageForVision } from '../lib/imageNormalizer';
 import { Customer } from '../types';
-import { CaptureIntent } from '../lib/captureIntent';
+import { CaptureIntent, INTENT_SECTION_LABEL } from '../lib/captureIntent';
 
 const INTENT_LABELS: Record<Exclude<CaptureIntent, 'other'>, string> = {
   trade: 'Trade-in',
@@ -15,6 +15,14 @@ const INTENT_LABELS: Record<Exclude<CaptureIntent, 'other'>, string> = {
 };
 
 const INTENT_CHIP_ORDER = ['trade', 'vehicle', 'license', 'insurance'] as const;
+
+const DOC_LABEL: Record<string, string> = {
+  license: 'License', insurance: 'Insurance card', trade_vehicle: 'Trade-in photo',
+  new_vehicle: 'Vehicle photo', window_sticker: 'Window sticker', vehicle: 'Vehicle photo', other: 'Photo',
+};
+
+interface PendingImage { file: File; preview: string | null; }
+interface Suggestion { label: string; action: () => void; }
 
 interface SpeechRecognitionEvent {
   results: {
@@ -45,12 +53,8 @@ const SpeechRecognition = typeof window !== 'undefined'
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  image?: string;
-  suggestion?: {
-    label: string;
-    action: () => void;
-    data: Record<string, unknown>;
-  };
+  images?: string[];
+  suggestions?: Suggestion[];
 }
 
 interface AIChatOverlayProps {
@@ -81,8 +85,7 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
   const [isTyping, setIsTyping] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [pendingImage, setPendingImage] = useState<File | null>(null);
-  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [pendingIntent, setPendingIntent] = useState<CaptureIntent>('other');
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -150,8 +153,7 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
   if (isOpen !== prevIsOpen) {
     setPrevIsOpen(isOpen);
     if (isOpen) {
-      setPendingImage(null);
-      setPendingPreview(null);
+      setPendingImages([]);
       setPendingIntent(initialIntent ?? 'other');
     }
   }
@@ -167,45 +169,164 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  const attachImage = (file: File) => {
-    setPendingImage(file);
-    fileToBase64(file).then(setPendingPreview).catch(() => setPendingPreview(null));
+  const attachImages = (files: File[]) => {
+    const images = files.filter(f => f.type.startsWith('image/'));
+    if (images.length === 0) return;
+    setPendingImages(prev => [...prev, ...images.map(file => ({ file, preview: null }))]);
+    images.forEach(file => {
+      fileToBase64(file)
+        .then(preview => setPendingImages(prev => prev.map(p => p.file === file ? { ...p, preview } : p)))
+        .catch(() => { /* thumbnail is optional */ });
+    });
   };
 
-  const discardPendingImage = () => {
-    setPendingImage(null);
-    setPendingPreview(null);
-    setPendingIntent(initialIntent ?? 'other');
+  const discardPendingImage = (index?: number) => {
+    if (index === undefined) {
+      setPendingImages([]);
+      setPendingIntent(initialIntent ?? 'other');
+      return;
+    }
+    setPendingImages(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length === 0) setPendingIntent(initialIntent ?? 'other');
+      return next;
+    });
+  };
+
+  const applyAndConfirm = (data: Record<string, unknown>, confirm: string) => {
+    onFieldsExtracted(data);
+    setMessages(p => [...p, { role: 'assistant', content: confirm }]);
+  };
+
+  /** Sends one message (with at most one photo) and applies the result. Returns the reply text and any chips. */
+  const processOne = async (
+    text: string,
+    history: { role: 'user' | 'model'; parts: { text: string }[] }[],
+    intent: CaptureIntent,
+    imageFile?: File,
+    imageData?: ImageData
+  ): Promise<{ text: string; suggestions: Suggestion[] }> => {
+    const response: ChatResponse = await processCustomerChat(text, currentCustomer, history, imageData, intent);
+    let finalMessage = response.message;
+    const suggestions: Suggestion[] = [];
+
+    // Inventory lookup if a stock number was found
+    if (response.inventoryStockFound) {
+      const vehicle = await lookupVehicleByStock(response.inventoryStockFound);
+      if (vehicle) {
+        finalMessage = `I found Stock #${vehicle.stock} in our inventory:\n\n` +
+          `• ${vehicle.year} ${vehicle.make} ${vehicle.model} ${vehicle.trim}\n` +
+          `• VIN: ${vehicle.vin}\n` +
+          `• MSRP: ${vehicle.msrp}\n` +
+          `• Color: ${vehicle.exteriorColor} / ${vehicle.interiorColor}\n\n` +
+          `Would you like me to add this vehicle to the profile?`;
+        suggestions.push({
+          label: `Add ${vehicle.year} ${vehicle.model} to Profile`,
+          action: () => applyAndConfirm({
+            vehicleStock: vehicle.stock, vehicleYear: vehicle.year, vehicleMake: vehicle.make,
+            vehicleModel: vehicle.model, vehicleVin: vehicle.vin
+          }, "✅ Vehicle added to profile!")
+        });
+      }
+    }
+
+    // Insurance cards list the insured vehicle. Offer it as the trade-in; nothing is written until tapped.
+    if (response.insuredVehicle) {
+      const { year, make, model, vin } = response.insuredVehicle;
+      if (year || make || model) {
+        const desc = [year, make, model].filter(Boolean).join(' ');
+        suggestions.push({
+          label: `Add ${desc} as trade?`,
+          action: () => applyAndConfirm({
+            hasTradeIn: true,
+            ...(year ? { tradeYear: year } : {}), ...(make ? { tradeMake: make } : {}),
+            ...(model ? { tradeModel: model } : {}), ...(vin ? { tradeVin: vin } : {})
+          }, "✅ Trade-in added to profile!")
+        });
+      }
+    }
+
+    // A vehicle photo where nobody said which one: ask, and hold the data until answered.
+    if (response.pendingVehicle) {
+      const v = response.pendingVehicle;
+      const desc = [v.year, v.make, v.model].filter(Boolean).join(' ') || (v.vin ? `VIN ${v.vin}` : 'this vehicle');
+      finalMessage = `I read ${desc}${v.vin && desc !== `VIN ${v.vin}` ? ` (VIN ${v.vin})` : ''}. Is this the trade-in or the new vehicle?`;
+      suggestions.push(
+        {
+          label: 'Trade-in',
+          action: () => applyAndConfirm({
+            hasTradeIn: true,
+            ...(v.year ? { tradeYear: v.year } : {}), ...(v.make ? { tradeMake: v.make } : {}),
+            ...(v.model ? { tradeModel: v.model } : {}), ...(v.trim ? { tradeTrim: v.trim } : {}),
+            ...(v.vin ? { tradeVin: v.vin } : {}), ...(v.miles ? { tradeMileage: v.miles } : {})
+          }, "✅ Saved to Trade-in.")
+        },
+        {
+          label: 'New vehicle',
+          action: () => applyAndConfirm({
+            ...(v.stock ? { vehicleStock: v.stock } : {}), ...(v.year ? { vehicleYear: v.year } : {}),
+            ...(v.make ? { vehicleMake: v.make } : {}), ...(v.model ? { vehicleModel: v.model } : {}),
+            ...(v.vin ? { vehicleVin: v.vin } : {}), ...(v.miles ? { vehicleMiles: v.miles } : {})
+          }, "✅ Saved to New Vehicle.")
+        }
+      );
+    }
+
+    // Filter out null/undefined from updatedFields to prevent erasing data
+    const cleanFields = Object.entries(response.updatedFields).reduce((acc, [key, value]) => {
+      if (value !== null && value !== undefined) acc[key] = value;
+      return acc;
+    }, {} as Record<string, unknown>);
+
+    if (response.inventoryStockFound && !cleanFields.vehicleStock) {
+      cleanFields.vehicleStock = response.inventoryStockFound;
+    }
+
+    if (Object.keys(cleanFields).length > 0 || response.hasGoodNotes) {
+      onFieldsExtracted(cleanFields, response.notesSummary);
+    }
+
+    if (imageFile && (response.documentType === 'license' || response.documentType === 'insurance')) {
+      onFieldsExtracted({}, undefined, { type: response.documentType, file: imageFile });
+    }
+
+    // Say exactly what was written and where, so the dealer knows what to check.
+    if (imageFile && !response.pendingVehicle) {
+      const intentUsed = intent !== 'other' ? intent : response.appliedIntent;
+      const doc = DOC_LABEL[response.documentType ?? 'other'] ?? 'Photo';
+      const n = Object.keys(cleanFields).length;
+      const count = `${n} field${n === 1 ? '' : 's'} filled`;
+      finalMessage += intentUsed && intentUsed !== 'other'
+        ? `\n\n${doc} → ${INTENT_SECTION_LABEL[intentUsed]}: ${count}.`
+        : `\n\n${doc}: ${count}.`;
+    }
+
+    if (response.unreadFields && response.unreadFields.length > 0) {
+      finalMessage += `\nCouldn't read: ${response.unreadFields.join(', ')} — please add manually.`;
+    }
+
+    return { text: finalMessage, suggestions };
   };
 
   const handleSend = async () => {
-    if ((!input.trim() && !pendingImage) || isTyping || isUploading) return;
+    if ((!input.trim() && pendingImages.length === 0) || isTyping || isUploading) return;
 
     const userMessage = input.trim();
-    const imageFile = pendingImage ?? undefined;
+    const files = pendingImages.map(p => p.file);
     const intent = pendingIntent;
     setInput('');
     discardPendingImage();
 
-    let imageData: ImageData | undefined;
-    let imagePreview: string | undefined;
-
-    if (imageFile) {
+    let prepared: { file: File; data: ImageData; preview: string }[] = [];
+    if (files.length > 0) {
       setIsUploading(true);
       try {
-        // High-fidelity normalization for AI extraction (handles EXIF, HEIC, Downscaling)
-        const normalized = await normalizeImageForVision(imageFile);
-        
-        // original base64 for user UI preview (fastest, keeps original look)
-        const originalBase64 = await fileToBase64(imageFile);
-        
-        imageData = {
-          inlineData: {
-            data: normalized.base64,
-            mimeType: normalized.mimeType
-          }
-        };
-        imagePreview = originalBase64;
+        prepared = await Promise.all(files.map(async file => {
+          // High-fidelity normalization for AI extraction (handles EXIF, HEIC, downscaling)
+          const normalized = await normalizeImageForVision(file);
+          const preview = await fileToBase64(file);
+          return { file, data: { inlineData: { data: normalized.base64, mimeType: normalized.mimeType } }, preview };
+        }));
       } catch (error) {
         console.error("Image processing error:", error);
         return;
@@ -214,10 +335,10 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
       }
     }
 
-    setMessages(prev => [...prev, { 
-      role: 'user', 
-      content: userMessage || (imageFile ? "Sent an image" : ""), 
-      image: imagePreview 
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: userMessage || (prepared.length > 1 ? `Sent ${prepared.length} photos` : prepared.length === 1 ? "Sent a photo" : ""),
+      images: prepared.map(p => p.preview)
     }]);
     setIsTyping(true);
 
@@ -227,99 +348,28 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
         role: (m.role === 'assistant' ? 'model' : 'user') as 'model' | 'user',
         parts: [{ text: m.content }]
       }));
+      const text = userMessage || "Extracted from image";
 
-      const response = await processCustomerChat(userMessage || "Extracted from image", currentCustomer, history, imageData, intent);
+      // One call per photo, all in parallel, same words with each. Text-only is a single call.
+      const jobs = prepared.length > 0
+        ? prepared.map(p => processOne(text, history, intent, p.file, p.data))
+        : [processOne(text, history, intent)];
+      const results = await Promise.allSettled(jobs);
 
-      let finalMessage = response.message;
-      let suggestionData: { label: string; data: Record<string, unknown>; confirmMessage: string } | null = null;
-
-      // Handle Inventory Lookup if stock found
-      if (response.inventoryStockFound) {
-        const vehicle = await lookupVehicleByStock(response.inventoryStockFound);
-        if (vehicle) {
-          finalMessage = `I found Stock #${vehicle.stock} in our inventory:\n\n` +
-            `• ${vehicle.year} ${vehicle.make} ${vehicle.model} ${vehicle.trim}\n` +
-            `• VIN: ${vehicle.vin}\n` +
-            `• MSRP: ${vehicle.msrp}\n` +
-            `• Color: ${vehicle.exteriorColor} / ${vehicle.interiorColor}\n\n` +
-            `Would you like me to add this vehicle to the profile?`;
-          
-          suggestionData = {
-            label: `Add ${vehicle.year} ${vehicle.model} to Profile`,
-            data: {
-              vehicleStock: vehicle.stock,
-              vehicleYear: vehicle.year,
-              vehicleMake: vehicle.make,
-              vehicleModel: vehicle.model,
-              vehicleVin: vehicle.vin
-            },
-            confirmMessage: "✅ Vehicle added to profile!"
-          };
-        }
+      const texts: string[] = [];
+      const suggestions: Suggestion[] = [];
+      let failed = 0;
+      results.forEach(r => {
+        if (r.status === 'fulfilled') { texts.push(r.value.text); suggestions.push(...r.value.suggestions); }
+        else { failed++; console.error("Chat Error:", r.reason); }
+      });
+      if (failed > 0) {
+        texts.push(failed === results.length
+          ? "Sorry, I ran into an error. Please check your internet connection or try a smaller image."
+          : `${failed} photo${failed === 1 ? '' : 's'} couldn't be processed. Try again with a sharper or smaller photo.`);
       }
 
-      // Insurance cards list the insured vehicle — offer it as the trade-in.
-      // Nothing is written unless the rep taps the chip.
-      if (intent === 'insurance' && response.insuredVehicle) {
-        const { year, make, model, vin } = response.insuredVehicle;
-        if (year || make || model) {
-          const desc = [year, make, model].filter(Boolean).join(' ');
-          suggestionData = {
-            label: `Add ${desc} as trade?`,
-            data: {
-              hasTradeIn: true,
-              ...(year ? { tradeYear: year } : {}),
-              ...(make ? { tradeMake: make } : {}),
-              ...(model ? { tradeModel: model } : {}),
-              ...(vin ? { tradeVin: vin } : {})
-            },
-            confirmMessage: "✅ Trade-in added to profile!"
-          };
-        }
-      }
-
-      if (response.unreadFields && response.unreadFields.length > 0) {
-        finalMessage += `\n\nCouldn't read: ${response.unreadFields.join(', ')} — please add manually.`;
-      }
-
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: finalMessage,
-        suggestion: suggestionData ? {
-          label: suggestionData.label,
-          data: suggestionData.data,
-          action: () => {
-            onFieldsExtracted(suggestionData.data);
-            setMessages(p => [...p, { role: 'assistant', content: suggestionData.confirmMessage }]);
-          }
-        } : undefined
-      }]);
-      
-      // Filter out null/undefined from updatedFields to prevent erasing data
-      const cleanFields = Object.entries(response.updatedFields).reduce((acc, [key, value]) => {
-        if (value !== null && value !== undefined) {
-          acc[key] = value;
-        }
-        return acc;
-      }, {} as Record<string, unknown>);
-
-      if (response.inventoryStockFound && !cleanFields.vehicleStock) {
-        cleanFields.vehicleStock = response.inventoryStockFound;
-      }
-
-      if (Object.keys(cleanFields).length > 0 || response.hasGoodNotes) {
-        onFieldsExtracted(cleanFields, response.notesSummary);
-      }
-
-      if (
-        imageFile && 
-        (response.documentType === 'license' || response.documentType === 'insurance')
-      ) {
-        onFieldsExtracted({}, undefined, { 
-          type: response.documentType, 
-          file: imageFile 
-        });
-      }
+      setMessages(prev => [...prev, { role: 'assistant', content: texts.join('\n\n'), suggestions }]);
     } catch (error) {
       console.error("Chat Error:", error);
       setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I ran into an error. Please check your internet connection or try a smaller image." }]);
@@ -338,9 +388,8 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
   };
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      attachImage(file);
+    if (e.target.files && e.target.files.length > 0) {
+      attachImages(Array.from(e.target.files));
     }
     e.target.value = '';
   };
@@ -351,16 +400,17 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
       if (isTyping || isUploading) return;
       const items = e.clipboardData?.items;
       if (!items) return;
+      const files: File[] = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         if (item.kind === 'file' && item.type.startsWith('image/')) {
           const file = item.getAsFile();
-          if (file) {
-            e.preventDefault();
-            attachImage(file);
-            break;
-          }
+          if (file) files.push(file);
         }
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        attachImages(files);
       }
     };
     window.addEventListener('paste', onPaste);
@@ -433,21 +483,30 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
                         ? 'bg-blue-600 text-white rounded-tr-none' 
                         : 'bg-gray-50 text-gray-800 rounded-tl-none'
                     }`}>
-                      {m.image && (
-                        <div className="mb-2 rounded-lg overflow-hidden border border-white/20">
-                          <img src={m.image} alt="Upload" className="max-w-full h-auto" />
+                      {m.images && m.images.length > 0 && (
+                        <div className={`mb-2 grid gap-1.5 ${m.images.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                          {m.images.map((src, j) => (
+                            <div key={j} className="rounded-lg overflow-hidden border border-white/20">
+                              <img src={src} alt="Upload" className="max-w-full h-auto" />
+                            </div>
+                          ))}
                         </div>
                       )}
-                      {m.content}
-                      
-                      {m.suggestion && (
-                        <button
-                          onClick={m.suggestion.action}
-                          className="mt-3 w-full flex items-center justify-center gap-2 bg-white text-blue-600 border border-blue-100 py-2.5 px-4 rounded-xl text-xs font-bold shadow-sm hover:bg-blue-50 active:scale-95 transition-all"
-                        >
-                          <Plus size={14} />
-                          {m.suggestion.label}
-                        </button>
+                      <span className="whitespace-pre-line">{m.content}</span>
+
+                      {m.suggestions && m.suggestions.length > 0 && (
+                        <div className={`mt-3 grid gap-2 ${m.suggestions.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                          {m.suggestions.map((sg, j) => (
+                            <button
+                              key={j}
+                              onClick={sg.action}
+                              className="w-full flex items-center justify-center gap-2 bg-white text-blue-600 border border-blue-100 py-2.5 px-4 rounded-xl text-xs font-bold shadow-sm hover:bg-blue-50 active:scale-95 transition-all"
+                            >
+                              <Plus size={14} />
+                              {sg.label}
+                            </button>
+                          ))}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -478,23 +537,38 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
               <input 
                 type="file" 
                 ref={fileInputRef} 
-                onChange={onFileChange} 
-                accept="image/*" 
+                onChange={onFileChange}
+                accept="image/*"
+                multiple
                 capture="environment"
                 className="hidden"
               />
 
-              {pendingImage && (
+              {pendingImages.length > 0 && (
                 <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-2xl">
-                  {pendingPreview ? (
-                    <img src={pendingPreview} alt="Attached" className="w-14 h-14 rounded-xl object-cover shrink-0" />
-                  ) : (
-                    <div className="w-14 h-14 rounded-xl bg-gray-200 shrink-0" />
-                  )}
+                  <div className="flex gap-1.5 shrink-0 max-w-[45%] overflow-x-auto">
+                    {pendingImages.map((p, i) => (
+                      <div key={i} className="relative shrink-0">
+                        {p.preview ? (
+                          <img src={p.preview} alt="Attached" className="w-14 h-14 rounded-xl object-cover" />
+                        ) : (
+                          <div className="w-14 h-14 rounded-xl bg-gray-200" />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => discardPendingImage(i)}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-900 text-white flex items-center justify-center shadow"
+                          aria-label="Remove photo"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                   <div className="flex-1 min-w-0 self-center">
                     {initialIntent && initialIntent !== 'other' && pendingIntent !== 'other' ? (
                       <span className="text-xs font-bold text-gray-600">
-                        {INTENT_LABELS[pendingIntent]} photo
+                        {INTENT_LABELS[pendingIntent]} photo{pendingImages.length > 1 ? 's' : ''}
                       </span>
                     ) : (
                       <div className="flex flex-wrap gap-1.5">
@@ -517,9 +591,9 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
                   </div>
                   <button
                     type="button"
-                    onClick={discardPendingImage}
+                    onClick={() => discardPendingImage()}
                     className="p-1.5 hover:bg-gray-200 rounded-full transition-colors shrink-0"
-                    aria-label="Discard photo"
+                    aria-label="Discard photos"
                   >
                     <X size={16} className="text-gray-400" />
                   </button>
@@ -577,7 +651,7 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
                 </button>
                 <button
                   onClick={() => handleSend()}
-                  disabled={(!input.trim() && !pendingImage) || isTyping || isUploading}
+                  disabled={(!input.trim() && pendingImages.length === 0) || isTyping || isUploading}
                   className="flex flex-col items-center justify-center gap-1.5 p-3 bg-gray-900 text-white rounded-2xl active:scale-95 disabled:opacity-50 transition-all font-bold text-[10px] uppercase tracking-wider"
                 >
                   {isUploading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}

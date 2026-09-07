@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterByIntent, INTENT_FIELDS, intentFromDocumentType, VEHICLE_PHOTO_FIELDS } from './captureIntent';
+import { filterByIntent, INTENT_FIELDS, intentFromDocumentType, VEHICLE_PHOTO_FIELDS, CAPTURE_SLOTS } from './captureIntent';
 
 describe('filterByIntent', () => {
   it('insurance intent keeps only insurance fields and drops vehicleVin / lastName', () => {
@@ -109,5 +109,23 @@ describe('intentFromDocumentType', () => {
     expect(VEHICLE_PHOTO_FIELDS).toContain('vehicleVin');
     expect(VEHICLE_PHOTO_FIELDS).toContain('tradeVin');
     expect(VEHICLE_PHOTO_FIELDS).toContain('hasTradeIn');
+  });
+});
+
+describe('payoff intent', () => {
+  it('keeps only lender fields and drops trade identity and name', () => {
+    const raw = { stillOwe: true, lienholder: 'Ally Financial', payoffAmount: '12480.22', monthlyPayment: '389', monthsRemaining: '31', tradeVin: '1FTFW1E58MFA12345', lastName: 'Mitchell' };
+    expect(filterByIntent(raw, 'payoff')).toEqual({ stillOwe: true, lienholder: 'Ally Financial', payoffAmount: '12480.22', monthlyPayment: '389', monthsRemaining: '31' });
+  });
+  it('routes a classified payoff letter to the payoff whitelist', () => {
+    expect(intentFromDocumentType('payoff')).toBe('payoff');
+  });
+});
+
+describe('CAPTURE_SLOTS', () => {
+  it('has one slot per intent, with other last', () => {
+    const ids = CAPTURE_SLOTS.map(s => s.id);
+    expect(ids).toEqual(['license', 'insurance', 'vehicle', 'trade', 'payoff', 'other']);
+    for (const id of ids) if (id !== 'other') expect(INTENT_FIELDS[id]).toBeDefined();
   });
 });

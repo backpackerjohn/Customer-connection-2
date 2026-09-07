@@ -16,7 +16,8 @@ import {
   Users,
   Flag,
   MessageSquare,
-  Loader2
+  Loader2,
+  Images
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Customer, Note } from '../types';
@@ -68,7 +69,8 @@ interface Props {
     options?: { skipCache?: boolean }
   ) => void;
   onReschedule: (customerId: string, date: string, reason: string) => void;
-  onCaptureForSection: (intent: CaptureIntent) => void;
+  /** Open the document tray, optionally straight into one slot's picker. */
+  onOpenDocumentTray: (slot?: CaptureIntent) => void;
 }
 
 export function CustomerProfileView({
@@ -94,7 +96,7 @@ export function CustomerProfileView({
   onSold,
   onReschedule,
   onTradeEstimate,
-  onCaptureForSection
+  onOpenDocumentTray
 }: Props) {
   return (
     <div className="max-w-2xl mx-auto">
@@ -168,16 +170,16 @@ export function CustomerProfileView({
             </div>
           </div>
         </div>
-        <CustomerInfoSection customer={currentCustomer} onChange={onUpdateCustomer} onCapture={() => onCaptureForSection('license')} />
-        <InsuranceSection customer={currentCustomer} onChange={onUpdateCustomer} onCapture={() => onCaptureForSection('insurance')} />
-        <NewVehicleSection customer={currentCustomer} onChange={onUpdateCustomer} onCapture={() => onCaptureForSection('vehicle')} />
+        <CustomerInfoSection customer={currentCustomer} onChange={onUpdateCustomer} onCapture={() => onOpenDocumentTray('license')} />
+        <InsuranceSection customer={currentCustomer} onChange={onUpdateCustomer} onCapture={() => onOpenDocumentTray('insurance')} />
+        <NewVehicleSection customer={currentCustomer} onChange={onUpdateCustomer} onCapture={() => onOpenDocumentTray('vehicle')} />
         <TradeInSection
           customer={currentCustomer}
           onChange={onUpdateCustomer}
           onTradeEstimate={onTradeEstimate}
           isEstimatingTradeValue={isEstimatingTradeValue}
           valuationError={valuationError}
-          onCapture={() => onCaptureForSection('trade')}
+          onCapture={() => onOpenDocumentTray('trade')}
         />
         <GoalsSection customer={currentCustomer} onChange={onUpdateCustomer} />
         <TimelineNotesSection 
@@ -259,6 +261,11 @@ export function CustomerProfileView({
                 icon={<MessageSquare size={20} />} 
                 label="Chat" 
                 onClick={onChat}
+              />
+              <SubButton
+                icon={<Images size={20} />}
+                label="Photos"
+                onClick={() => onOpenDocumentTray()}
               />
               <SubButton 
                 icon={isGeneratingPacket 

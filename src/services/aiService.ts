@@ -72,6 +72,11 @@ const INTENT_FIELD_DOCS: Record<ScopedIntent, string> = {
     - vehicleMiles: Vehicle mileage/odometer reading`,
   insurance: `    - insuranceCompany: Insurance company name
     - agentName: Insurance agent name`,
+  payoff: `    - stillOwe: true when the document shows an outstanding loan balance
+    - lienholder: Lender / lienholder name
+    - payoffAmount: Payoff amount (digits and decimal only, no currency symbol)
+    - monthlyPayment: Monthly payment (digits and decimal only)
+    - monthsRemaining: Number of payments remaining`,
   license: `    - firstName: First name
     - middleInitial: Middle initial (single character if possible)
     - lastName: Last name
@@ -90,6 +95,7 @@ const INTENT_CONTEXT: Record<ScopedIntent, string> = {
   vehicle: "the NEW VEHICLE the customer wants to buy (a window sticker, VIN sticker, stock tag, or a description of the vehicle of interest)",
   insurance: "the customer's INSURANCE CARD",
   license: "the customer's DRIVER'S LICENSE",
+  payoff: "the PAYOFF / LOAN statement for the customer's trade-in (a lender letter, a banking app screenshot, or a 10-day payoff quote)",
 };
 
 const INTENT_EXTRAS: Record<ScopedIntent, string> = {
@@ -97,6 +103,7 @@ const INTENT_EXTRAS: Record<ScopedIntent, string> = {
   vehicle: `    6. If a dealer stock number is found, also put it in 'inventoryStockFound'.`,
   insurance: `    6. The insured vehicle(s) printed on the card do NOT belong in updatedFields. Put the primary insured vehicle's year, make, model, and VIN into 'insuredVehicle' instead. If several vehicles are listed, use the first one.`,
   license: '',
+  payoff: `    6. Use the payoff amount valid on the latest date shown. Ignore per-diem, account numbers, and mailing addresses.`,
 };
 
 function buildScopedSystemInstruction(intent: ScopedIntent): string {
@@ -122,7 +129,7 @@ ${INTENT_EXTRAS[intent]}
   `;
 }
 
-const BOOLEAN_INTENT_FIELDS = new Set(['hasTradeIn']);
+const BOOLEAN_INTENT_FIELDS = new Set(['hasTradeIn', 'stillOwe']);
 
 function buildScopedResponseSchema(intent: ScopedIntent) {
   const fieldProps: Record<string, { type: Type }> = {};
@@ -241,9 +248,10 @@ export async function processCustomerChat(
        - 'trade_vehicle' when the photo shows the customer's CURRENT vehicle (VIN label, registration, odometer, the car itself) AND the dealer's words make that clear (e.g. "his trade", "what she drives now", "current car")
        - 'new_vehicle' when the photo shows a vehicle the customer wants to BUY and the dealer's words make that clear (e.g. "the one she wants", "stock tag", "new car")
        - 'vehicle' when the photo shows a vehicle or VIN and NOTHING in the dealer's words says whether it is the trade or the purchase. Do not guess.
-       - 'other' for anything else (loan statement, note, unknown paper)
+       - 'payoff' when the photo is a lender payoff letter, loan statement, or banking-app screenshot for the customer's current vehicle
+       - 'other' for anything else (note, unknown paper)
        The dealer's words ALWAYS win over what the photo looks like. When no image is provided, omit documentType.
-       Put the fields under the matching keys: trade_vehicle -> trade*, new_vehicle/window_sticker -> vehicle*. For 'vehicle' use vehicle* keys; they will be moved after the dealer answers.
+       Put the fields under the matching keys: trade_vehicle -> trade*, new_vehicle/window_sticker -> vehicle*, payoff -> stillOwe/lienholder/payoffAmount/monthlyPayment/monthsRemaining. For 'vehicle' use vehicle* keys; they will be moved after the dealer answers.
     8. If the image is an insurance card, the insured vehicle(s) do NOT belong in updatedFields. Put the primary insured vehicle's year, make, model, and VIN into 'insuredVehicle' instead.
     ${currentDataBlock}
   `;
@@ -357,6 +365,7 @@ export async function processCustomerChat(
       if (image && intent === 'insurance') parsedResult.documentType = 'insurance';
       if (image && intent === 'trade') parsedResult.documentType = 'trade_vehicle';
       if (image && intent === 'vehicle') parsedResult.documentType = 'new_vehicle';
+      if (image && intent === 'payoff') parsedResult.documentType = 'payoff';
       parsedResult.appliedIntent = intent;
     }
 
@@ -416,7 +425,8 @@ export async function processCustomerChat(
       parsedResult.documentType === 'window_sticker' ||
       parsedResult.documentType === 'trade_vehicle' ||
       parsedResult.documentType === 'new_vehicle' ||
-      parsedResult.documentType === 'vehicle'
+      parsedResult.documentType === 'vehicle' ||
+      parsedResult.documentType === 'payoff'
     ) {
       parsedResult.hasGoodNotes = false;
       delete parsedResult.notesSummary;

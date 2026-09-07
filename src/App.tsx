@@ -12,7 +12,8 @@ import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { auth, handleFirestoreError, OperationType } from './lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 
-import { AIChatOverlay } from './components/AIChatOverlay';
+import { AIChatOverlay, ChatSeed } from './components/AIChatOverlay';
+import { DocumentTray, TrayItem } from './components/DocumentTray';
 import { CaptureIntent } from './lib/captureIntent';
 import { NavItem } from './components/NavItem';
 import { NavIconButton } from './components/NavIconButton';
@@ -59,7 +60,9 @@ export default function App() {
   const [isDirty, setIsDirty] = useState(false);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [aiOverlayIntent, setAiOverlayIntent] = useState<CaptureIntent | null>(null);
+  const [isTrayOpen, setIsTrayOpen] = useState(false);
+  const [trayInitialSlot, setTrayInitialSlot] = useState<CaptureIntent | null>(null);
+  const [chatSeed, setChatSeed] = useState<ChatSeed | null>(null);
   const [isGeneratingPacket, setIsGeneratingPacket] = useState(false);
   const [isGeneratingSoldPacket, setIsGeneratingSoldPacket] = useState(false);
   const [isEstimatingTradeValue, setIsEstimatingTradeValue] = useState(false);
@@ -626,8 +629,17 @@ export default function App() {
     }
   };
 
-  const handleCaptureForSection = (intent: CaptureIntent) => {
-    setAiOverlayIntent(intent);
+  const handleOpenDocumentTray = (slot?: CaptureIntent) => {
+    setTrayInitialSlot(slot ?? null);
+    setIsChatOpen(false);
+    setIsTrayOpen(true);
+  };
+
+  // The tray hands its photos to the chat, which sends each one under its slot's whitelist.
+  const handleTrayExtract = (items: TrayItem[], note: string) => {
+    setChatSeed({ items: items.map(it => ({ file: it.file, slot: it.slot })), note });
+    setIsTrayOpen(false);
+    setTrayInitialSlot(null);
     setIsChatOpen(true);
   };
 
@@ -828,7 +840,7 @@ export default function App() {
               onSold={handleSold}
               onTradeEstimate={handleTradeEstimate}
               onReschedule={handleReschedule}
-              onCaptureForSection={handleCaptureForSection}
+              onOpenDocumentTray={handleOpenDocumentTray}
             />
           </motion.div>
         )}
@@ -860,14 +872,19 @@ export default function App() {
 
       <AIChatOverlay
         isOpen={isChatOpen}
-        onClose={() => {
-          setIsChatOpen(false);
-          setAiOverlayIntent(null);
-        }}
+        onClose={() => setIsChatOpen(false)}
         currentCustomer={currentCustomer}
         onFieldsExtracted={handleAIFieldsExtracted}
-        initialIntent={aiOverlayIntent ?? 'other'}
-        autoOpenPicker={!!aiOverlayIntent}
+        seed={chatSeed}
+        onSeedConsumed={() => setChatSeed(null)}
+      />
+
+      <DocumentTray
+        isOpen={isTrayOpen}
+        onClose={() => { setIsTrayOpen(false); setTrayInitialSlot(null); }}
+        currentCustomer={currentCustomer}
+        initialSlot={trayInitialSlot}
+        onExtract={handleTrayExtract}
       />
 
       {/* Mobile Nav Bar - Only visible on Dashboard or if we want global nav */}

@@ -12,16 +12,22 @@ const INTENT_LABELS: Record<Exclude<CaptureIntent, 'other'>, string> = {
   vehicle: 'New vehicle',
   license: 'License',
   insurance: 'Insurance',
+  payoff: 'Payoff',
 };
 
-const INTENT_CHIP_ORDER = ['trade', 'vehicle', 'license', 'insurance'] as const;
+const INTENT_CHIP_ORDER = ['trade', 'vehicle', 'license', 'insurance', 'payoff'] as const;
 
 const DOC_LABEL: Record<string, string> = {
   license: 'License', insurance: 'Insurance card', trade_vehicle: 'Trade-in photo',
-  new_vehicle: 'Vehicle photo', window_sticker: 'Window sticker', vehicle: 'Vehicle photo', other: 'Photo',
+  new_vehicle: 'Vehicle photo', window_sticker: 'Window sticker', vehicle: 'Vehicle photo',
+  payoff: 'Payoff letter', other: 'Photo',
 };
 
-interface PendingImage { file: File; preview: string | null; }
+/** `slot` is set when the photo came from the document tray; it overrides the chip row. */
+interface PendingImage { file: File; preview: string | null; slot?: CaptureIntent; }
+
+/** A batch handed over by the document tray: sent as soon as the overlay opens. */
+export interface ChatSeed { items: { file: File; slot: CaptureIntent }[]; note: string; }
 interface Suggestion { label: string; action: () => void; }
 
 interface SpeechRecognitionEvent {
@@ -68,6 +74,8 @@ interface AIChatOverlayProps {
   ) => void;
   initialIntent?: CaptureIntent;
   autoOpenPicker?: boolean;
+  seed?: ChatSeed | null;
+  onSeedConsumed?: () => void;
 }
 
 export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
@@ -76,7 +84,9 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
   currentCustomer,
   onFieldsExtracted,
   initialIntent,
-  autoOpenPicker
+  autoOpenPicker,
+  seed,
+  onSeedConsumed
 }) => {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: "Hi! I'm your AI assistant. Tell me anything about the customer, or snap a photo of their ID/Insurance, and I'll fill out the fields for you." }
@@ -310,22 +320,27 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
 
   const handleSend = async () => {
     if ((!input.trim() && pendingImages.length === 0) || isTyping || isUploading) return;
-
     const userMessage = input.trim();
-    const files = pendingImages.map(p => p.file);
-    const intent = pendingIntent;
+    const photos = pendingImages.map(p => ({ file: p.file, intent: p.slot ?? pendingIntent }));
     setInput('');
     discardPendingImage();
+    await sendMessage(userMessage, photos, pendingIntent);
+  };
 
-    let prepared: { file: File; data: ImageData; preview: string }[] = [];
-    if (files.length > 0) {
+  /**
+   * The one send path. `photos` each carry their own intent (a tray slot, or the chip row's
+   * value); `textIntent` scopes a text-only message. Every photo is its own parallel call.
+   */
+  const sendMessage = async (userMessage: string, photos: { file: File; intent: CaptureIntent }[], textIntent: CaptureIntent) => {
+    let prepared: { file: File; intent: CaptureIntent; data: ImageData; preview: string }[] = [];
+    if (photos.length > 0) {
       setIsUploading(true);
       try {
-        prepared = await Promise.all(files.map(async file => {
+        prepared = await Promise.all(photos.map(async ({ file, intent }) => {
           // High-fidelity normalization for AI extraction (handles EXIF, HEIC, downscaling)
           const normalized = await normalizeImageForVision(file);
           const preview = await fileToBase64(file);
-          return { file, data: { inlineData: { data: normalized.base64, mimeType: normalized.mimeType } }, preview };
+          return { file, intent, data: { inlineData: { data: normalized.base64, mimeType: normalized.mimeType } }, preview };
         }));
       } catch (error) {
         console.error("Image processing error:", error);
@@ -352,8 +367,8 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
 
       // One call per photo, all in parallel, same words with each. Text-only is a single call.
       const jobs = prepared.length > 0
-        ? prepared.map(p => processOne(text, history, intent, p.file, p.data))
-        : [processOne(text, history, intent)];
+        ? prepared.map(p => processOne(text, history, p.intent, p.file, p.data))
+        : [processOne(text, history, textIntent)];
       const results = await Promise.allSettled(jobs);
 
       const texts: string[] = [];
@@ -377,6 +392,19 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
       setIsTyping(false);
     }
   };
+
+  // A batch from the document tray: send it the moment the overlay is open.
+  // Deferred a tick so the send runs after this render, not inside the effect body.
+  useEffect(() => {
+    if (!isOpen || !seed || seed.items.length === 0) return;
+    const batch = seed;
+    onSeedConsumed?.();
+    const t = setTimeout(() => {
+      sendMessage(batch.note, batch.items.map(it => ({ file: it.file, intent: it.slot })), 'other');
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, seed]);
 
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -553,6 +581,11 @@ export const AIChatOverlay: React.FC<AIChatOverlayProps> = ({
                           <img src={p.preview} alt="Attached" className="w-14 h-14 rounded-xl object-cover" />
                         ) : (
                           <div className="w-14 h-14 rounded-xl bg-gray-200" />
+                        )}
+                        {p.slot && p.slot !== 'other' && (
+                          <span className="absolute bottom-0 left-0 right-0 text-[8px] font-bold uppercase tracking-wider text-white bg-gray-900/80 rounded-b-xl text-center py-0.5 truncate">
+                            {INTENT_LABELS[p.slot]}
+                          </span>
                         )}
                         <button
                           type="button"

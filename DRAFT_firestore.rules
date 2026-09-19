@@ -113,7 +113,11 @@ service cloud.firestore {
         && (!('pendingInterestNotes' in data) || (data.pendingInterestNotes is string && data.pendingInterestNotes.size() <= 500))
 
         // Communication channel
-        && (!('contactChannel' in data) || (data.contactChannel is string && data.contactChannel.size() <= 30));
+        && (!('contactChannel' in data) || (data.contactChannel is string && data.contactChannel.size() <= 30))
+
+        // Trade check-in (Buyers Guide / Check-In Sheet packet)
+        && (!('tradeIsBLine' in data) || data.tradeIsBLine is bool)
+        && (!('tradeStockNumber' in data) || (data.tradeStockNumber is string && data.tradeStockNumber.size() <= 20));
     }
 
     function isValidNote(data) {
@@ -166,7 +170,8 @@ service cloud.firestore {
           'tradeValueSource', 'tradeValueCondition',
           'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
           'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
-          'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working'
+          'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working',
+          'tradeIsBLine', 'tradeStockNumber'
         ])
         && incoming().createdAt == request.time
         && (incoming().updatedAt == request.time || !('updatedAt' in incoming()))
@@ -196,7 +201,8 @@ service cloud.firestore {
             'tradeValueSource', 'tradeValueCondition',
             'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
             'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
-            'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working'
+            'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working',
+            'tradeIsBLine', 'tradeStockNumber'
           ])
         )
         && (incoming().get('updatedAt', request.time) == request.time);

@@ -73,6 +73,10 @@ export interface Customer {
     | 'showroom' | 'phone' | 'web' | 'other';
   contactChannel?: 'text' | 'crm-text' | 'email' | 'snapchat' | 'facebook';
   working?: boolean;
+  /** Trade check-in: B-line trades get a Buyers Guide only, no Check-In Sheet. Dealer-only, never AI-extracted. */
+  tradeIsBLine?: boolean;
+  /** Trade check-in: dealer override of the derived trade stock number (see lib/tradeStockNumber.ts). Dealer-only. */
+  tradeStockNumber?: string;
   leadGeneratedDate?: string;    // ISO date YYYY-MM-DD, captured by Bulk Intake
   pendingInterestNotes?: string; // free text holding secondary vehicle interests dropped at intake
   createdAt?: FirestoreTimestamp;

@@ -17,7 +17,8 @@ import {
   Flag,
   MessageSquare,
   Loader2,
-  Images
+  Images,
+  ClipboardList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Customer, Note } from '../types';
@@ -45,6 +46,7 @@ interface Props {
   activeMenu: string | null;
   isGeneratingPacket: boolean;
   isGeneratingSoldPacket: boolean;
+  isGeneratingTradePacket: boolean;
   isEstimatingTradeValue: boolean;
   testDriveError: string | null;
   soldError: string | null;
@@ -57,6 +59,8 @@ interface Props {
   onChat: () => void;
   onTestDrive: () => void;
   onSold: () => void;
+  /** Buyers Guide (+ Check-In Sheet unless B-line) for the trade. Also runs automatically after Sold. */
+  onTradePacket: () => void;
   onTradeEstimate: (
     input: { 
       vin: string; 
@@ -82,6 +86,7 @@ export function CustomerProfileView({
   activeMenu,
   isGeneratingPacket,
   isGeneratingSoldPacket,
+  isGeneratingTradePacket,
   isEstimatingTradeValue,
   testDriveError,
   soldError,
@@ -94,6 +99,7 @@ export function CustomerProfileView({
   onChat,
   onTestDrive,
   onSold,
+  onTradePacket,
   onReschedule,
   onTradeEstimate,
   onOpenDocumentTray
@@ -284,6 +290,15 @@ export function CustomerProfileView({
                 label="Sold" 
                 onClick={isGeneratingSoldPacket ? undefined : onSold}
                 disabled={!currentCustomer.id || isGeneratingSoldPacket}
+              />
+              <SubButton
+                icon={isGeneratingTradePacket
+                  ? <Loader2 size={20} className="animate-spin" />
+                  : <ClipboardList size={20} />
+                }
+                label="Trade"
+                onClick={isGeneratingTradePacket ? undefined : onTradePacket}
+                disabled={!currentCustomer.id || !currentCustomer.hasTradeIn || isGeneratingTradePacket}
               />
             </motion.div>
           )}

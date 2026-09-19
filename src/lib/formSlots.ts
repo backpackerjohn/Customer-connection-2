@@ -25,4 +25,6 @@ export const FORM_SLOTS: FormSlot[] = [
   { id: 'privacy-policy', filename: 'privacy-policy.pdf', label: 'Privacy Policy', description: 'Used when generating a Sold packet.' },
   { id: 'payoff', filename: 'payoff.pdf', label: 'Pay Off', description: 'Used when generating a Sold packet (trade with balance owed).' },
   { id: 'three-liner', filename: 'three-liner.pdf', label: '3-Liner', description: 'Used when generating a Sold packet (cash deal).' },
+  { id: 'buyers-guide', filename: 'buyers-guide.pdf', label: 'Buyers Guide', description: 'Used when generating a Trade packet (every trade).' },
+  { id: 'trade-check-in', filename: 'trade-check-in.pdf', label: 'Trade Check-In Sheet', description: 'Used when generating a Trade packet (skipped for B-line trades).' },
 ];

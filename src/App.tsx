@@ -28,10 +28,13 @@ import { REMINDER_CONFIG } from './lib/reminders/config';
 import { 
   buildTestDrivePacket, 
   buildSoldPacket,
+  buildTradePacket,
   downloadPdfBytes, 
   packetFilename,
   selectSoldForms,
-  soldPacketFilename
+  selectTradeForms,
+  soldPacketFilename,
+  tradePacketFilename
 } from './services/pdfService';
 import { getFormFileMetadata, uploadCustomerImage } from './services/imagesService';
 import { getTradeValuation } from './services/valuationService';
@@ -65,6 +68,7 @@ export default function App() {
   const [chatSeed, setChatSeed] = useState<ChatSeed | null>(null);
   const [isGeneratingPacket, setIsGeneratingPacket] = useState(false);
   const [isGeneratingSoldPacket, setIsGeneratingSoldPacket] = useState(false);
+  const [isGeneratingTradePacket, setIsGeneratingTradePacket] = useState(false);
   const [isEstimatingTradeValue, setIsEstimatingTradeValue] = useState(false);
   const [testDriveError, setTestDriveError] = useState<string | null>(null);
   const [soldError, setSoldError] = useState<string | null>(null);
@@ -504,6 +508,45 @@ export default function App() {
     }
   };
 
+  /**
+   * Trade packet: Buyers Guide for every trade, plus the Check-In Sheet unless
+   * the trade is a B-line. Runs on its own from the AI menu and automatically
+   * after Sold. Returns true when a file was downloaded.
+   */
+  const generateTradePacket = async (customer: Customer): Promise<boolean> => {
+    const neededSlots = selectTradeForms(customer);
+    if (neededSlots.length === 0) return false;
+    const metadatas = await Promise.all(
+      neededSlots.map(id => {
+        const slot = FORM_SLOTS.find(s => s.id === id);
+        return getFormFileMetadata(slot?.filename ?? 'missing.pdf');
+      })
+    );
+    const missingLabels = neededSlots
+      .filter((_, i) => !metadatas[i].exists)
+      .map(id => FORM_SLOTS.find(s => s.id === id)?.label ?? id);
+    if (missingLabels.length > 0) {
+      showSoldError(`Upload ${missingLabels.join(' and ')} in Settings → Forms for the trade packet.`);
+      return false;
+    }
+    const bytes = await buildTradePacket(customer);
+    downloadPdfBytes(bytes, tradePacketFilename(customer));
+    return true;
+  };
+
+  const handleTradePacket = async () => {
+    if (isGeneratingTradePacket || !currentCustomer.hasTradeIn) return;
+    setIsGeneratingTradePacket(true);
+    try {
+      await generateTradePacket(currentCustomer);
+    } catch (err) {
+      console.error('Trade packet generation failed:', err);
+      showSoldError('Could not generate the trade packet. See console for details.');
+    } finally {
+      setIsGeneratingTradePacket(false);
+    }
+  };
+
   const handleSold = async () => {
     if (isGeneratingSoldPacket) return;
     
@@ -573,6 +616,20 @@ export default function App() {
       showSoldError('Could not generate packet. See console for details.');
     } finally {
       setIsGeneratingSoldPacket(false);
+    }
+
+    // The trade packet is a separate download, generated after the Sold packet and
+    // the status stamp so a missing Buyers Guide template can never block the sale.
+    if (currentCustomer.hasTradeIn) {
+      setIsGeneratingTradePacket(true);
+      try {
+        await generateTradePacket(currentCustomer);
+      } catch (err) {
+        console.error('Trade packet generation failed:', err);
+        showSoldError('Sold packet saved. The trade packet failed; use the Trade button to retry.');
+      } finally {
+        setIsGeneratingTradePacket(false);
+      }
     }
   };
 
@@ -826,6 +883,7 @@ export default function App() {
               activeMenu={activeMenu}
               isGeneratingPacket={isGeneratingPacket}
               isGeneratingSoldPacket={isGeneratingSoldPacket}
+              isGeneratingTradePacket={isGeneratingTradePacket}
               isEstimatingTradeValue={isEstimatingTradeValue}
               testDriveError={testDriveError}
               soldError={soldError}
@@ -838,6 +896,7 @@ export default function App() {
               onChat={() => setIsChatOpen(true)}
               onTestDrive={handleTestDrive}
               onSold={handleSold}
+              onTradePacket={handleTradePacket}
               onTradeEstimate={handleTradeEstimate}
               onReschedule={handleReschedule}
               onOpenDocumentTray={handleOpenDocumentTray}

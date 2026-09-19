@@ -8,9 +8,12 @@ import {
   DEAL_CHECKLIST_FIELDS,
   PRIVACY_POLICY_FIELDS,
   PAYOFF_FIELDS,
-  THREE_LINER_FIELDS
+  THREE_LINER_FIELDS,
+  BUYERS_GUIDE_FIELDS,
+  TRADE_CHECK_IN_FIELDS
 } from '../lib/pdfFieldMappings';
 import { timed } from '../lib/timing';
+import { buyersGuideForCustomer } from '../lib/buyersGuideRules';
 
 export async function fillTestDriveAgreement(customer: Customer): Promise<Uint8Array> {
   const url = await getBlankFormUrl('test-drive-agreement.pdf');
@@ -257,6 +260,91 @@ export async function buildSoldPacket(customer: Customer): Promise<Uint8Array> {
 
     return await merged.save();
   });
+}
+
+// ---------------------------------------------------------------------------
+// Trade packet: generated alongside the Sold packet when the deal has a trade.
+// Buyers Guide always; Check-In Sheet unless the trade is a B-line.
+// ---------------------------------------------------------------------------
+
+export async function fillBuyersGuide(customer: Customer): Promise<Uint8Array> {
+  const url = await getBlankFormUrl('buyers-guide.pdf');
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch buyers guide: ${response.status}`);
+  const blankBytes = await response.arrayBuffer();
+  const pdfDoc = await PDFDocument.load(blankBytes);
+  const form = pdfDoc.getForm();
+  for (const mapping of BUYERS_GUIDE_FIELDS) {
+    try {
+      form.getTextField(mapping.pdfFieldName).setText(mapping.getValue(customer));
+    } catch (err) { console.warn(`Buyers Guide field "${mapping.pdfFieldName}" not found:`, err); }
+  }
+
+  // Warranty boxes from the store rules (see lib/buyersGuideRules.ts).
+  // Note the template's As-Is box name has two spaces. Service Contract stays unchecked.
+  const decision = buyersGuideForCustomer(customer);
+  const setBox = (name: string, on: boolean) => {
+    try {
+      const box = form.getCheckBox(name);
+      if (on) box.check(); else box.uncheck();
+    } catch (err) { console.warn(`Buyers Guide checkbox "${name}" not found:`, err); }
+  };
+  setBox('AS IS  NO WARRANTY', decision.kind === 'as-is');
+  setBox('WARRANTY', decision.kind === 'warranty');
+  setBox('FULL', decision.kind === 'warranty');
+  setBox('LIMITED WARANTY  The dealer will pay', false);
+  setBox('SERVICE CONTRACT', false);
+
+  return await pdfDoc.save();
+}
+
+export async function fillTradeCheckIn(customer: Customer): Promise<Uint8Array> {
+  const url = await getBlankFormUrl('trade-check-in.pdf');
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch trade check-in sheet: ${response.status}`);
+  const blankBytes = await response.arrayBuffer();
+  const pdfDoc = await PDFDocument.load(blankBytes);
+  const form = pdfDoc.getForm();
+  for (const mapping of TRADE_CHECK_IN_FIELDS) {
+    try {
+      form.getTextField(mapping.pdfFieldName).setText(mapping.getValue(customer));
+    } catch (err) { console.warn(`Trade Check-In field "${mapping.pdfFieldName}" not found:`, err); }
+  }
+  return await pdfDoc.save();
+}
+
+/** Which trade forms a deal needs. Empty when there is no trade. */
+export function selectTradeForms(customer: Customer): string[] {
+  if (!customer.hasTradeIn) return [];
+  return customer.tradeIsBLine ? ['buyers-guide'] : ['buyers-guide', 'trade-check-in'];
+}
+
+export async function buildTradePacket(customer: Customer): Promise<Uint8Array> {
+  return await timed('pdfService.buildTradePacket', async () => {
+    const slots = selectTradeForms(customer);
+    const fillTasks = slots.map(slotId => {
+      if (slotId === 'buyers-guide') return fillBuyersGuide(customer);
+      if (slotId === 'trade-check-in') return fillTradeCheckIn(customer);
+      return Promise.reject(new Error(`Unknown trade form slot for fill: ${slotId}`));
+    });
+    const results = await Promise.all(fillTasks);
+    const merged = await PDFDocument.create();
+    for (const bytes of results) {
+      const doc = await PDFDocument.load(bytes);
+      const pages = await merged.copyPages(doc, doc.getPageIndices());
+      pages.forEach(p => merged.addPage(p));
+    }
+    return await merged.save();
+  });
+}
+
+export function tradePacketFilename(customer: Customer): string {
+  const slug = `${customer.firstName ?? ''}_${customer.lastName ?? ''}`
+    .replace(/[^a-zA-Z0-9_]/g, '')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '') || 'Customer';
+  const today = new Date().toISOString().slice(0, 10);
+  return `${slug}_Trade_${today}.pdf`;
 }
 
 export function downloadPdfBytes(bytes: Uint8Array, filename: string): void {

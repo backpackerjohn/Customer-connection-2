@@ -453,4 +453,32 @@ describe('Firestore rules — Customer collection', () => {
       }))
     );
   });
+
+  it('36. Valid tradeIsBLine and tradeStockNumber accepted', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'customers/v36'), validCustomer({
+        tradeIsBLine: true,
+        tradeStockNumber: '6EL917A'
+      }))
+    );
+  });
+
+  it('37. tradeStockNumber over 20 chars rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/v37'), validCustomer({
+        tradeStockNumber: 'x'.repeat(21)
+      }))
+    );
+  });
+
+  it('38. tradeIsBLine must be a boolean', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/v38'), validCustomer({
+        tradeIsBLine: 'yes'
+      }))
+    );
+  });
 });

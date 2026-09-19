@@ -7,6 +7,8 @@ import {
   PRIVACY_POLICY_FIELDS,
   PAYOFF_FIELDS,
   THREE_LINER_FIELDS,
+  BUYERS_GUIDE_FIELDS,
+  TRADE_CHECK_IN_FIELDS,
 } from './pdfFieldMappings';
 import { Customer } from '../types';
 
@@ -151,5 +153,55 @@ describe('THREE_LINER_FIELDS', () => {
   it('_today_ uses dealDate (today when purchaseDate unset)', () => {
     const m = THREE_LINER_FIELDS.find(x => x.pdfFieldName === '_today_')!;
     expect(m.getValue(sample)).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
+  });
+});
+
+const tradeSample: Customer = {
+  ...sample,
+  hasTradeIn: true,
+  tradeYear: '2021', tradeMake: 'Hyundai', tradeModel: 'Santa Fe', tradeTrim: 'SEL',
+  tradeMileage: '41,250', tradeVin: '5nmS3dajxmh123456',
+};
+const get = (fields: typeof BUYERS_GUIDE_FIELDS, name: string, c: Customer) =>
+  fields.find(x => x.pdfFieldName === name)!.getValue(c);
+
+describe('BUYERS_GUIDE_FIELDS', () => {
+  it('has 9 mappings (checkboxes handled in pdfService)', () => {
+    expect(BUYERS_GUIDE_FIELDS).toHaveLength(9);
+  });
+  it('vehicle fields come from the trade, VIN uppercased, stock derived from the new car', () => {
+    expect(get(BUYERS_GUIDE_FIELDS, 'tiv_yr', tradeSample)).toBe('2021');
+    expect(get(BUYERS_GUIDE_FIELDS, 'tiv_make', tradeSample)).toBe('Hyundai');
+    expect(get(BUYERS_GUIDE_FIELDS, 'tiv_vin', tradeSample)).toBe('5NMS3DAJXMH123456');
+    expect(get(BUYERS_GUIDE_FIELDS, 'stock number', tradeSample)).toBe('6EL669A');
+  });
+  it('a dealer override wins for the stock number', () => {
+    expect(get(BUYERS_GUIDE_FIELDS, 'stock number', { ...tradeSample, tradeStockNumber: '7PL11B' })).toBe('7PL11B');
+  });
+  it('warranty rows are 100 / 100 with the warranty text when a warranty applies', () => {
+    // 2021 Hyundai, 41,250 miles: factory remainder (relative to the current year this may age out;
+    // use a trade that is always inside the 3/3 window instead).
+    const recent: Customer = { ...tradeSample, tradeMake: 'Toyota', tradeYear: String(new Date().getFullYear() - 1), tradeMileage: '12000' };
+    expect(get(BUYERS_GUIDE_FIELDS, '% if Labor', recent)).toBe('100');
+    expect(get(BUYERS_GUIDE_FIELDS, '% of Parts', recent)).toBe('100');
+    expect(get(BUYERS_GUIDE_FIELDS, 'SYSTEMS COVERED 1', recent)).toBe('3 months or 3,000 miles');
+    expect(get(BUYERS_GUIDE_FIELDS, 'DURATION 1', recent)).toBe('3 months or 3,000 miles');
+  });
+  it('As-Is leaves the warranty rows blank', () => {
+    const old: Customer = { ...tradeSample, tradeYear: '2010', tradeMileage: '150000' };
+    expect(get(BUYERS_GUIDE_FIELDS, '% if Labor', old)).toBe('');
+    expect(get(BUYERS_GUIDE_FIELDS, 'SYSTEMS COVERED 1', old)).toBe('');
+  });
+});
+
+describe('TRADE_CHECK_IN_FIELDS', () => {
+  it('has 8 mappings (profile layer only in phase 1)', () => {
+    expect(TRADE_CHECK_IN_FIELDS).toHaveLength(8);
+  });
+  it('fills the trade identity and the derived stock number', () => {
+    expect(get(TRADE_CHECK_IN_FIELDS, 'tiv_stock_no', tradeSample)).toBe('6EL669A');
+    expect(get(TRADE_CHECK_IN_FIELDS, 'tiv_trim', tradeSample)).toBe('SEL');
+    expect(get(TRADE_CHECK_IN_FIELDS, 'tiv_mileage', tradeSample)).toBe('41,250');
+    expect(get(TRADE_CHECK_IN_FIELDS, '_today_', tradeSample)).toMatch(/\d{4}$/);
   });
 });

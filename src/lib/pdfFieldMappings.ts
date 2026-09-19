@@ -1,4 +1,6 @@
 import { Customer } from '../types';
+import { tradeStockNumberFor } from './tradeStockNumber';
+import { buyersGuideForCustomer } from './buyersGuideRules';
 
 export interface PdfFieldMapping {
   pdfFieldName: string;
@@ -145,4 +147,44 @@ export const THREE_LINER_FIELDS: PdfFieldMapping[] = [
   { pdfFieldName: 'c_zipcode', getValue: c => c.zip ?? '' },
   { pdfFieldName: 'c_cell_phone', getValue: c => c.phone ?? '' },
   { pdfFieldName: '_today_', getValue: c => dealDate(c) },
+];
+
+// ---------------------------------------------------------------------------
+// Trade packet: Buyers Guide + Trade Check-In Sheet (see pdfService.buildTradePacket)
+// ---------------------------------------------------------------------------
+
+function todayLongDate(): string {
+  return new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+// Buyers Guide — TEXT fields only. The As-Is / Warranty / Full checkboxes are
+// driven by buyersGuideForCustomer() inside pdfService.fillBuyersGuide.
+// Dealer name/address are baked into the template and are not mapped.
+// Rules: SYSTEMS COVERED 1 and DURATION 1 both carry the warranty text
+// ("3 months or 3,000 miles" or the Hyundai remainder); percentages are
+// 100 / 100 whenever a warranty applies; Service Contract and
+// "See For Complaints" always stay blank.
+export const BUYERS_GUIDE_FIELDS: PdfFieldMapping[] = [
+  { pdfFieldName: 'tiv_yr', getValue: c => c.tradeYear ?? '' },
+  { pdfFieldName: 'tiv_make', getValue: c => c.tradeMake ?? '' },
+  { pdfFieldName: 'tiv_model', getValue: c => c.tradeModel ?? '' },
+  { pdfFieldName: 'tiv_vin', getValue: c => (c.tradeVin ?? '').toUpperCase() },
+  { pdfFieldName: 'stock number', getValue: c => tradeStockNumberFor(c) },
+  { pdfFieldName: '% if Labor', getValue: c => (buyersGuideForCustomer(c).kind === 'warranty' ? '100' : '') },
+  { pdfFieldName: '% of Parts', getValue: c => (buyersGuideForCustomer(c).kind === 'warranty' ? '100' : '') },
+  { pdfFieldName: 'SYSTEMS COVERED 1', getValue: c => buyersGuideForCustomer(c).text },
+  { pdfFieldName: 'DURATION 1', getValue: c => buyersGuideForCustomer(c).text },
+];
+
+// Trade Check-In Sheet — phase 1 fills the profile layer only (identity of the
+// trade). Engine / drivetrain / equipment boxes come in later phases.
+export const TRADE_CHECK_IN_FIELDS: PdfFieldMapping[] = [
+  { pdfFieldName: '_today_', getValue: () => todayLongDate() },
+  { pdfFieldName: 'tiv_stock_no', getValue: c => tradeStockNumberFor(c) },
+  { pdfFieldName: 'tiv_vin', getValue: c => (c.tradeVin ?? '').toUpperCase() },
+  { pdfFieldName: 'tiv_yr', getValue: c => c.tradeYear ?? '' },
+  { pdfFieldName: 'tiv_make', getValue: c => c.tradeMake ?? '' },
+  { pdfFieldName: 'tiv_model', getValue: c => c.tradeModel ?? '' },
+  { pdfFieldName: 'tiv_trim', getValue: c => c.tradeTrim ?? '' },
+  { pdfFieldName: 'tiv_mileage', getValue: c => c.tradeMileage ?? '' },
 ];

@@ -195,8 +195,15 @@ describe('BUYERS_GUIDE_FIELDS', () => {
 });
 
 describe('TRADE_CHECK_IN_FIELDS', () => {
-  it('has 8 mappings (profile layer only in phase 1)', () => {
-    expect(TRADE_CHECK_IN_FIELDS).toHaveLength(8);
+  it('has 15 mappings (identity + specs + colors + audio/app names)', () => {
+    expect(TRADE_CHECK_IN_FIELDS).toHaveLength(15);
+  });
+  it('spec and color fields come from tradeCheckIn and are blank without it', () => {
+    expect(get(TRADE_CHECK_IN_FIELDS, 'tiv_engine', tradeSample)).toBe('');
+    const withCi: Customer = { ...tradeSample, tradeCheckIn: { equipment: [], unsure: [], engine: '3.5L V6', cylinders: '6', extColor: 'White' } };
+    expect(get(TRADE_CHECK_IN_FIELDS, 'tiv_engine', withCi)).toBe('3.5L V6');
+    expect(get(TRADE_CHECK_IN_FIELDS, 'CYL', withCi)).toBe('6');
+    expect(get(TRADE_CHECK_IN_FIELDS, 'tiv_ext_color', withCi)).toBe('White');
   });
   it('fills the trade identity and the derived stock number', () => {
     expect(get(TRADE_CHECK_IN_FIELDS, 'tiv_stock_no', tradeSample)).toBe('6EL669A');

@@ -17,6 +17,28 @@ export interface VinImageResult {
 }
 
 /**
+ * Full NHTSA record for the Trade Check-In Sheet (drivetrain, doors, fuel,
+ * engine, transmission, cab/bed, reported safety features). Returns null on
+ * a bad VIN or network failure. Mapping to sheet boxes lives in lib/vinDecodeMap.ts.
+ */
+export async function decodeVinRecord(vin: string): Promise<Record<string, string> | null> {
+  if (!vin || vin.length !== 17) return null;
+  try {
+    const response = await timed('vinService.decodeVinRecord (NHTSA)', async () => {
+      return await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${vin}?format=json`);
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const result = data.Results?.[0];
+    if (!result || !result.Make?.trim() || !result.ModelYear?.trim()) return null;
+    return result as Record<string, string>;
+  } catch (error) {
+    console.error('VIN record decode error:', error);
+    return null;
+  }
+}
+
+/**
  * Decodes a 17-character VIN using the NHTSA API.
  */
 export async function decodeVin(vin: string): Promise<VinDetails | null> {

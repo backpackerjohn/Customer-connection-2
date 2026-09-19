@@ -18,7 +18,11 @@ import { CaptureIntent } from './lib/captureIntent';
 import { NavItem } from './components/NavItem';
 import { NavIconButton } from './components/NavIconButton';
 
-import { Customer, Note, Todo, emptyCustomer } from './types';
+import { Customer, Note, Todo, TradeCheckIn, emptyCustomer } from './types';
+import { decodeVinRecord } from './services/vinService';
+import { vinFactsFromRecord } from './lib/vinDecodeMap';
+import { lookupTradeEquipment } from './services/tradeEquipmentService';
+import { normalizeBoxes, setBox } from './lib/tradeCheckInSheet';
 import { createCustomer, updateCustomer, subscribeToCustomers } from './services/customersService';
 import { createNote, subscribeToNotes, subscribeToAllNotes } from './services/notesService';
 import { createContact } from './services/contactsService';
@@ -69,6 +73,8 @@ export default function App() {
   const [isGeneratingPacket, setIsGeneratingPacket] = useState(false);
   const [isGeneratingSoldPacket, setIsGeneratingSoldPacket] = useState(false);
   const [isGeneratingTradePacket, setIsGeneratingTradePacket] = useState(false);
+  const [isTradeLookingUp, setIsTradeLookingUp] = useState(false);
+  const [tradeLookupError, setTradeLookupError] = useState<string | null>(null);
   const [isEstimatingTradeValue, setIsEstimatingTradeValue] = useState(false);
   const [testDriveError, setTestDriveError] = useState<string | null>(null);
   const [soldError, setSoldError] = useState<string | null>(null);
@@ -509,6 +515,85 @@ export default function App() {
   };
 
   /**
+   * Trade Check-In lookup: decode the trade VIN through NHTSA (deterministic
+   * boxes: drivetrain, doors, fuel, engine, cab/bed, reported safety features),
+   * then a grounded Gemini lookup of the trim's standard/optional equipment.
+   * Standard equipment is ticked; optional is flagged for the associate to
+   * confirm at the car. Returns the customer patch, or throws with a message.
+   */
+  const runTradeLookup = async (customer: Customer): Promise<Partial<Customer>> => {
+    const vin = (customer.tradeVin ?? '').trim().toUpperCase();
+    const record = vin.length === 17 ? await decodeVinRecord(vin) : null;
+    const facts = record ? vinFactsFromRecord(record) : null;
+
+    const year = record?.ModelYear?.trim() || customer.tradeYear || '';
+    const make = record?.Make?.trim() || customer.tradeMake || '';
+    const model = record?.Model?.trim() || customer.tradeModel || '';
+    const trim = facts?.trim || customer.tradeTrim || '';
+    if (!year || !make || !model) {
+      throw new Error(vin.length === 17
+        ? 'The VIN did not decode. Check it, or enter year, make, and model by hand.'
+        : 'Enter a 17-character trade VIN, or year, make, and model, then look up.');
+    }
+
+    const lookup = await lookupTradeEquipment({ year, make, model, trim: trim || undefined });
+    const prev = customer.tradeCheckIn;
+
+    // VIN facts first (exclusive groups respected), then manufacturer-reported
+    // standard safety features, then everything the lookup called standard.
+    let equipment: string[] = [];
+    for (const b of facts?.boxes ?? []) equipment = setBox(equipment, b, true);
+    for (const b of facts?.standardFeatures ?? []) equipment = setBox(equipment, b, true);
+    const unsure: string[] = [];
+    for (const [box, status] of Object.entries(lookup?.statuses ?? {})) {
+      if (status === 'standard') equipment = setBox(equipment, box, true);
+      else if (status === 'optional') unsure.push(box);
+    }
+    equipment = normalizeBoxes(equipment);
+
+    const checkIn: TradeCheckIn = {
+      equipment,
+      unsure: normalizeBoxes(unsure.filter(b => !equipment.includes(b))),
+      engine: facts?.engine || prev?.engine,
+      cylinders: facts?.cylinders || prev?.cylinders,
+      transmissionSpeeds: facts?.transmissionSpeeds || prev?.transmissionSpeeds,
+      extColor: prev?.extColor,
+      intColor: prev?.intColor,
+      premiumAudioBrand: lookup?.premiumAudioBrand ?? prev?.premiumAudioBrand,
+      smartphoneAppName: lookup?.smartphoneAppName ?? prev?.smartphoneAppName,
+      trim: trim || undefined,
+      sources: lookup?.sources.length ? lookup.sources.join(', ') : undefined,
+      lookedUpAt: new Date().toISOString(),
+    };
+    // Drop undefined values so Firestore never sees them.
+    const cleanCheckIn = Object.fromEntries(Object.entries(checkIn).filter(([, v]) => v !== undefined)) as unknown as TradeCheckIn;
+
+    // Fill empty trade identity fields from the decode as a courtesy.
+    const identity: Partial<Customer> = {};
+    if (!customer.tradeYear && year) identity.tradeYear = year;
+    if (!customer.tradeMake && make) identity.tradeMake = make;
+    if (!customer.tradeModel && model) identity.tradeModel = model;
+    if (!customer.tradeTrim && trim) identity.tradeTrim = trim;
+
+    return { ...identity, tradeCheckIn: cleanCheckIn };
+  };
+
+  const handleTradeLookup = async () => {
+    if (isTradeLookingUp) return;
+    setIsTradeLookingUp(true);
+    setTradeLookupError(null);
+    try {
+      const patch = await runTradeLookup(currentCustomer);
+      updateCustomerState(patch);
+    } catch (err) {
+      console.error('Trade lookup failed:', err);
+      setTradeLookupError(err instanceof Error ? err.message : 'Lookup failed. Try again.');
+    } finally {
+      setIsTradeLookingUp(false);
+    }
+  };
+
+  /**
    * Trade packet: Buyers Guide for every trade, plus the Check-In Sheet unless
    * the trade is a B-line. Runs on its own from the AI menu and automatically
    * after Sold. Returns true when a file was downloaded.
@@ -529,8 +614,24 @@ export default function App() {
       showSoldError(`Upload ${missingLabels.join(' and ')} in Settings → Forms for the trade packet.`);
       return false;
     }
-    const bytes = await buildTradePacket(customer);
-    downloadPdfBytes(bytes, tradePacketFilename(customer));
+    // First print of a non-B-line trade: run the lookup automatically so the
+    // sheet comes out filled. A lookup failure never blocks the print.
+    let toPrint = customer;
+    if (!customer.tradeIsBLine && !customer.tradeCheckIn?.lookedUpAt) {
+      try {
+        setIsTradeLookingUp(true);
+        const patch = await runTradeLookup(customer);
+        updateCustomerState(patch);
+        toPrint = { ...customer, ...patch };
+      } catch (err) {
+        console.warn('Trade lookup skipped:', err);
+        setTradeLookupError(err instanceof Error ? err.message : 'Lookup failed. Sheet printed without equipment.');
+      } finally {
+        setIsTradeLookingUp(false);
+      }
+    }
+    const bytes = await buildTradePacket(toPrint);
+    downloadPdfBytes(bytes, tradePacketFilename(toPrint));
     return true;
   };
 
@@ -897,6 +998,9 @@ export default function App() {
               onTestDrive={handleTestDrive}
               onSold={handleSold}
               onTradePacket={handleTradePacket}
+              onTradeLookup={handleTradeLookup}
+              isTradeLookingUp={isTradeLookingUp}
+              tradeLookupError={tradeLookupError}
               onTradeEstimate={handleTradeEstimate}
               onReschedule={handleReschedule}
               onOpenDocumentTray={handleOpenDocumentTray}

@@ -14,6 +14,7 @@ import {
 } from '../lib/pdfFieldMappings';
 import { timed } from '../lib/timing';
 import { buyersGuideForCustomer } from '../lib/buyersGuideRules';
+import { APP_BOXES } from '../lib/tradeCheckInSheet';
 
 export async function fillTestDriveAgreement(customer: Customer): Promise<Uint8Array> {
   const url = await getBlankFormUrl('test-drive-agreement.pdf');
@@ -309,6 +310,15 @@ export async function fillTradeCheckIn(customer: Customer): Promise<Uint8Array> 
     try {
       form.getTextField(mapping.pdfFieldName).setText(mapping.getValue(customer));
     } catch (err) { console.warn(`Trade Check-In field "${mapping.pdfFieldName}" not found:`, err); }
+  }
+  // Checkboxes: tick exactly what the card shows as ticked. Hand-filled boxes
+  // (Detail, UCI, Salvage) are not in APP_BOXES and are never touched.
+  const ticked = new Set(customer.tradeCheckIn?.equipment ?? []);
+  for (const name of APP_BOXES) {
+    try {
+      const box = form.getCheckBox(name);
+      if (ticked.has(name)) box.check(); else box.uncheck();
+    } catch (err) { console.warn(`Trade Check-In checkbox "${name}" not found:`, err); }
   }
   return await pdfDoc.save();
 }

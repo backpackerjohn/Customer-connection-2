@@ -187,4 +187,11 @@ export const TRADE_CHECK_IN_FIELDS: PdfFieldMapping[] = [
   { pdfFieldName: 'tiv_model', getValue: c => c.tradeModel ?? '' },
   { pdfFieldName: 'tiv_trim', getValue: c => c.tradeTrim ?? '' },
   { pdfFieldName: 'tiv_mileage', getValue: c => c.tradeMileage ?? '' },
+  { pdfFieldName: 'tiv_engine', getValue: c => c.tradeCheckIn?.engine ?? '' },
+  { pdfFieldName: 'CYL', getValue: c => c.tradeCheckIn?.cylinders ?? '' },
+  { pdfFieldName: 'Transmission Speeds', getValue: c => c.tradeCheckIn?.transmissionSpeeds ?? '' },
+  { pdfFieldName: 'tiv_ext_color', getValue: c => c.tradeCheckIn?.extColor ?? '' },
+  { pdfFieldName: 'tiv_int_color', getValue: c => c.tradeCheckIn?.intColor ?? '' },
+  { pdfFieldName: 'Premium Audio Brand', getValue: c => c.tradeCheckIn?.premiumAudioBrand ?? '' },
+  { pdfFieldName: 'Other Smartphone App Name', getValue: c => c.tradeCheckIn?.smartphoneAppName ?? '' },
 ];

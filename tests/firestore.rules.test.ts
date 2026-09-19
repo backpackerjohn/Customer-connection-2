@@ -481,4 +481,31 @@ describe('Firestore rules — Customer collection', () => {
       }))
     );
   });
+
+  it('39. Valid tradeCheckIn map accepted', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'customers/v39'), validCustomer({
+        tradeCheckIn: { equipment: ['AWD', '4 Doors', 'Leather'], unsure: ['Tow Package'], engine: '3.5L V6', extColor: 'White' }
+      }))
+    );
+  });
+
+  it('40. tradeCheckIn equipment list over 150 entries rejected', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/v40'), validCustomer({
+        tradeCheckIn: { equipment: Array.from({ length: 151 }, (_, i) => `Box ${i}`), unsure: [] }
+      }))
+    );
+  });
+
+  it('41. tradeCheckIn must be a map with list fields', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertFails(
+      setDoc(doc(aliceDb, 'customers/v41'), validCustomer({
+        tradeCheckIn: { equipment: 'AWD', unsure: [] }
+      }))
+    );
+  });
 });

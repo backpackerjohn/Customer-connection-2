@@ -34,6 +34,7 @@ import { CustomerInfoSection } from './profile/CustomerInfoSection';
 import { InsuranceSection } from './profile/InsuranceSection';
 import { NewVehicleSection } from './profile/NewVehicleSection';
 import { TradeInSection } from './profile/TradeInSection';
+import { TradeCheckInSection } from './profile/TradeCheckInSection';
 import { GoalsSection } from './profile/GoalsSection';
 import { TimelineNotesSection } from './profile/TimelineNotesSection';
 
@@ -61,6 +62,10 @@ interface Props {
   onSold: () => void;
   /** Buyers Guide (+ Check-In Sheet unless B-line) for the trade. Also runs automatically after Sold. */
   onTradePacket: () => void;
+  /** Decode the trade VIN and look up the trim's equipment for the Check-In Sheet. */
+  onTradeLookup: () => void;
+  isTradeLookingUp: boolean;
+  tradeLookupError: string | null;
   onTradeEstimate: (
     input: { 
       vin: string; 
@@ -100,6 +105,9 @@ export function CustomerProfileView({
   onTestDrive,
   onSold,
   onTradePacket,
+  onTradeLookup,
+  isTradeLookingUp,
+  tradeLookupError,
   onReschedule,
   onTradeEstimate,
   onOpenDocumentTray
@@ -187,6 +195,15 @@ export function CustomerProfileView({
           valuationError={valuationError}
           onCapture={() => onOpenDocumentTray('trade')}
         />
+        {currentCustomer.hasTradeIn && (
+          <TradeCheckInSection
+            customer={currentCustomer}
+            onChange={onUpdateCustomer}
+            onLookup={onTradeLookup}
+            isLookingUp={isTradeLookingUp}
+            lookupError={tradeLookupError}
+          />
+        )}
         <GoalsSection customer={currentCustomer} onChange={onUpdateCustomer} />
         <TimelineNotesSection 
           customer={currentCustomer}

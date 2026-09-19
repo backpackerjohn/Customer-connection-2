@@ -3,6 +3,30 @@ export interface FirestoreTimestamp {
   nanoseconds: number;
 }
 
+/**
+ * What prints on the Trade Check-In Sheet beyond the vehicle identity.
+ * `equipment` holds the EXACT checkbox names from the template that are ticked;
+ * `unsure` holds boxes the lookup called optional for the trim (shown flagged,
+ * not ticked, for the associate to confirm at the car).
+ */
+export interface TradeCheckIn {
+  equipment: string[];
+  unsure: string[];
+  engine?: string;
+  cylinders?: string;
+  transmissionSpeeds?: string;
+  extColor?: string;
+  intColor?: string;
+  premiumAudioBrand?: string;
+  smartphoneAppName?: string;
+  /** Trim the lookup was run for (from the VIN decode). */
+  trim?: string;
+  /** Source domains the grounded lookup cited, comma-separated. */
+  sources?: string;
+  /** ISO timestamp of the last lookup. */
+  lookedUpAt?: string;
+}
+
 export interface Customer {
   id?: string;
   firstName: string;
@@ -77,6 +101,8 @@ export interface Customer {
   tradeIsBLine?: boolean;
   /** Trade check-in: dealer override of the derived trade stock number (see lib/tradeStockNumber.ts). Dealer-only. */
   tradeStockNumber?: string;
+  /** Trade Check-In Sheet contents (see lib/tradeCheckInSheet.ts). One map so it costs the rules budget one field. */
+  tradeCheckIn?: TradeCheckIn;
   leadGeneratedDate?: string;    // ISO date YYYY-MM-DD, captured by Bulk Intake
   pendingInterestNotes?: string; // free text holding secondary vehicle interests dropped at intake
   createdAt?: FirestoreTimestamp;

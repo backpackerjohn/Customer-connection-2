@@ -117,7 +117,10 @@ service cloud.firestore {
 
         // Trade check-in (Buyers Guide / Check-In Sheet packet)
         && (!('tradeIsBLine' in data) || data.tradeIsBLine is bool)
-        && (!('tradeStockNumber' in data) || (data.tradeStockNumber is string && data.tradeStockNumber.size() <= 20));
+        && (!('tradeStockNumber' in data) || (data.tradeStockNumber is string && data.tradeStockNumber.size() <= 20))
+        && (!('tradeCheckIn' in data) || (data.tradeCheckIn is map && data.tradeCheckIn.size() <= 12
+            && data.tradeCheckIn.get('equipment', []) is list && data.tradeCheckIn.get('equipment', []).size() <= 150
+            && data.tradeCheckIn.get('unsure', []) is list && data.tradeCheckIn.get('unsure', []).size() <= 150));
     }
 
     function isValidNote(data) {
@@ -171,7 +174,7 @@ service cloud.firestore {
           'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
           'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
           'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working',
-          'tradeIsBLine', 'tradeStockNumber'
+          'tradeIsBLine', 'tradeStockNumber', 'tradeCheckIn'
         ])
         && incoming().createdAt == request.time
         && (incoming().updatedAt == request.time || !('updatedAt' in incoming()))
@@ -202,7 +205,7 @@ service cloud.firestore {
             'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
             'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
             'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working',
-            'tradeIsBLine', 'tradeStockNumber'
+            'tradeIsBLine', 'tradeStockNumber', 'tradeCheckIn'
           ])
         )
         && (incoming().get('updatedAt', request.time) == request.time);

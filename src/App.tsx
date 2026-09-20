@@ -544,7 +544,7 @@ export default function App() {
       lookup = await lookupTradeEquipment({ year, make, model, trim: trim || undefined }, options);
     } catch (err) {
       if (!(err instanceof EquipmentLookupError)) throw err;
-      warning = `Equipment lookup failed: ${err.message} VIN facts were kept; tick the equipment boxes by hand or retry.`;
+      warning = `Equipment lookup failed (${err.message}) VIN facts were kept. Retry with Look up, or tick the equipment boxes by hand.`;
     }
     const prev = customer.tradeCheckIn;
 

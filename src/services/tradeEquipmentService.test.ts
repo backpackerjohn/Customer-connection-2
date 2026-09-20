@@ -16,10 +16,11 @@ describe('isRetryableGeminiError', () => {
 
 describe('summarizeGeminiError', () => {
   it('turns the raw API error into one readable line', () => {
-    expect(summarizeGeminiError(api503)).toBe('Gemini is overloaded (503). Try again in a minute.');
+    expect(summarizeGeminiError(api503)).toBe('Gemini overloaded (503)');
     expect(summarizeGeminiError(new Error('{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}'))).toMatch(/429/);
     expect(summarizeGeminiError(new Error('{"error":{"code":404,"message":"models/x is not found","status":"NOT_FOUND"}}'))).toMatch(/404/);
     expect(summarizeGeminiError(new Error('signal timed out'))).toMatch(/in time/);
+    expect(summarizeGeminiError(new Error('{"error":{"code":400,"message":"Invalid value at thinking_config","status":"INVALID_ARGUMENT"}}'))).toMatch(/400.*thinking_config/);
     expect(summarizeGeminiError('something odd')).toBe('something odd');
   });
 });

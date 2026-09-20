@@ -21,7 +21,7 @@ import { NavIconButton } from './components/NavIconButton';
 import { Customer, Note, Todo, TradeCheckIn, emptyCustomer } from './types';
 import { decodeVinRecord } from './services/vinService';
 import { vinFactsFromRecord } from './lib/vinDecodeMap';
-import { lookupTradeEquipment } from './services/tradeEquipmentService';
+import { lookupTradeEquipment, UNVERIFIED_SOURCES } from './services/tradeEquipmentService';
 import { normalizeBoxes, setBox } from './lib/tradeCheckInSheet';
 import { createCustomer, updateCustomer, subscribeToCustomers } from './services/customersService';
 import { createNote, subscribeToNotes, subscribeToAllNotes } from './services/notesService';
@@ -521,7 +521,7 @@ export default function App() {
    * Standard equipment is ticked; optional is flagged for the associate to
    * confirm at the car. Returns the customer patch, or throws with a message.
    */
-  const runTradeLookup = async (customer: Customer): Promise<Partial<Customer>> => {
+  const runTradeLookup = async (customer: Customer, options: { quick?: boolean } = {}): Promise<Partial<Customer>> => {
     const vin = (customer.tradeVin ?? '').trim().toUpperCase();
     const record = vin.length === 17 ? await decodeVinRecord(vin) : null;
     const facts = record ? vinFactsFromRecord(record) : null;
@@ -536,7 +536,7 @@ export default function App() {
         : 'Enter a 17-character trade VIN, or year, make, and model, then look up.');
     }
 
-    const lookup = await lookupTradeEquipment({ year, make, model, trim: trim || undefined });
+    const lookup = await lookupTradeEquipment({ year, make, model, trim: trim || undefined }, options);
     const prev = customer.tradeCheckIn;
 
     // VIN facts first (exclusive groups respected), then manufacturer-reported
@@ -562,7 +562,9 @@ export default function App() {
       premiumAudioBrand: lookup?.premiumAudioBrand ?? prev?.premiumAudioBrand,
       smartphoneAppName: lookup?.smartphoneAppName ?? prev?.smartphoneAppName,
       trim: trim || undefined,
-      sources: lookup?.sources.length ? lookup.sources.join(', ') : undefined,
+      sources: lookup
+        ? (lookup.verified && lookup.sources.length ? lookup.sources.join(', ') : UNVERIFIED_SOURCES)
+        : undefined,
       lookedUpAt: new Date().toISOString(),
     };
     // Drop undefined values so Firestore never sees them.
@@ -620,7 +622,8 @@ export default function App() {
     if (!customer.tradeIsBLine && !customer.tradeCheckIn?.lookedUpAt) {
       try {
         setIsTradeLookingUp(true);
-        const patch = await runTradeLookup(customer);
+        // Quick mode: one grounded attempt, then model knowledge, so the print is not held up.
+        const patch = await runTradeLookup(customer, { quick: true });
         updateCustomerState(patch);
         toPrint = { ...customer, ...patch };
       } catch (err) {

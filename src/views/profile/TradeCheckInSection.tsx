@@ -6,6 +6,7 @@ import { Toggle } from '../../components/Toggle';
 import { deriveTradeStockNumber, tradeStockNumberFor } from '../../lib/tradeStockNumber';
 import { buyersGuideForCustomer } from '../../lib/buyersGuideRules';
 import { VIN_FACT_GROUPS, EQUIPMENT_GROUPS, setBox, SheetGroup } from '../../lib/tradeCheckInSheet';
+import { UNVERIFIED_SOURCES } from '../../services/tradeEquipmentService';
 
 interface Props {
   customer: Customer;
@@ -120,7 +121,7 @@ export function TradeCheckInSection({ customer, onChange, onLookup, isLookingUp,
                   <div className="font-semibold text-gray-700">Equipment from the VIN</div>
                   <div className="text-xs text-gray-400">
                     {ci.lookedUpAt
-                      ? <>Looked up {new Date(ci.lookedUpAt).toLocaleDateString()}{ci.trim ? ` for the ${ci.trim} trim` : ''}{ci.sources ? ` · ${ci.sources}` : ''}</>
+                      ? <>Looked up {new Date(ci.lookedUpAt).toLocaleDateString()}{ci.trim ? ` for the ${ci.trim} trim` : ''}{ci.sources ? (ci.sources === UNVERIFIED_SOURCES ? <span className="text-amber-700"> · from model knowledge, not web-verified. Confirm at the car.</span> : ` · ${ci.sources}`) : ''}</>
                       : 'Decodes the VIN, then looks up standard and optional equipment for the trim.'}
                   </div>
                 </div>

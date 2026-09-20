@@ -12,119 +12,199 @@ export interface EquipmentLookupResult {
   /** Free-text extras the sheet has a line for. */
   premiumAudioBrand?: string;
   smartphoneAppName?: string;
-  /** Distinct source domains the grounded call cited. */
+  /** Distinct source domains the grounded call cited. Empty when not web-verified. */
   sources: string[];
-  /** The model's own notes, e.g. "trim not found, used base trim". */
+  /** True when the answer came from a live web search; false when it came from model knowledge only. */
+  verified: boolean;
+  /** Which path produced the answer, for the log. */
+  via: 'grounded-2.5' | 'grounded-2.0' | 'fast';
   notes?: string;
 }
 
-/**
- * Two calls on purpose: the Gemini API does not reliably combine live Google
- * Search grounding with strict JSON output in one request. Call 1 researches
- * with search and returns prose plus source URLs. Call 2 turns that prose into
- * the exact sheet box names with a strict schema.
- */
-export async function lookupTradeEquipment(input: {
-  year: string; make: string; model: string; trim?: string;
-}): Promise<EquipmentLookupResult | null> {
-  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set');
-  const vehicle = [input.year, input.make, input.model, input.trim].filter(Boolean).join(' ').trim();
-  if (!input.year || !input.make || !input.model) return null;
+/** Stored in tradeCheckIn.sources when the answer came from model knowledge only. */
+export const UNVERIFIED_SOURCES = 'model knowledge, not web-verified';
 
-  const checklist = EQUIPMENT_BOXES.map(b => `- ${b}`).join('\n');
+export interface LookupOptions {
+  /**
+   * Quick mode is for print time: one grounded attempt with a short timeout,
+   * then the fast fallback. Full mode (the card's Look up button) also tries
+   * the second grounded model before falling back.
+   */
+  quick?: boolean;
+}
 
-  // ---- Call 1: grounded research ----
-  const research = await timed('tradeEquipment.research (grounded)', async () => {
-    return await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [{
-        role: 'user',
-        parts: [{ text:
-`Research the factory equipment of the ${vehicle} (US market)${input.trim ? '' : ' (trim unknown: use the base trim and say so)'}.
-Use the manufacturer's site and reputable spec sites (Edmunds, KBB, Cars.com, Car and Driver).
+const GROUNDED_MODEL = 'gemini-2.5-flash';
+const GROUNDED_FALLBACK_MODEL = 'gemini-2.0-flash';
+const FAST_MODEL = 'gemini-2.5-flash';
 
-For EACH item on this dealer check-in checklist, answer exactly one of: STANDARD (came on every ${input.trim ? 'unit of this trim' : 'base-trim unit'}), OPTIONAL (available as a package or option on this trim), NO (not offered on this trim), or UNKNOWN (could not verify).
-Also give: the premium audio brand if any (e.g. Bose, Harman Kardon, Bang & Olufsen), and the manufacturer's smartphone app name if it is not KiaConnect, uConnect, or Bluelink.
+const checklist = () => EQUIPMENT_BOXES.map(b => `- ${b}`).join('\n');
+const vehicleName = (i: { year: string; make: string; model: string; trim?: string }) =>
+  [i.year, i.make, i.model, i.trim].filter(Boolean).join(' ').trim();
 
-Notes for judging:
+const JUDGING_NOTES = `Notes for judging:
 - "Cloth" and "Leather" describe the seat material of the trim.
 - "Rear Window" means a rear window on a truck cab; "Rear Window Defrost" and "Rear Window Wiper" are separate.
 - "Smartphone App Integration" means the maker's remote app (e.g. HondaLink, FordPass, MySubaru, Toyota app).
-- Tick "AC" for any air conditioning; "Climate Control" only for automatic/dual-zone climate control.
+- Tick "AC" for any air conditioning; "Climate Control" only for automatic/dual-zone climate control.`;
 
-Checklist:
-${checklist}
+/** 503 / 429 / timeouts are worth retrying or falling back on; 400s are not. */
+export function isRetryableGeminiError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /"code":\s*(503|429|500|504)|UNAVAILABLE|RESOURCE_EXHAUSTED|DEADLINE|high demand|overloaded|timed? ?out|aborted|fetch failed|network/i.test(msg);
+}
 
-Answer as a plain list, one line per item: "<item>: <STANDARD|OPTIONAL|NO|UNKNOWN> - <short reason>". Then two final lines: "Premium audio brand: <brand or none>" and "Smartphone app: <name or none>". Be concrete and do not skip items.` }],
-      }],
-      config: {
-        tools: [{ googleSearch: {} }],
-        temperature: 0,
-      },
-    });
-  });
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-  const prose = research.text ?? '';
-  if (!prose.trim()) return null;
-  const sources = new Set<string>();
-  for (const chunk of research.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []) {
-    const uri = chunk.web?.uri;
-    const title = chunk.web?.title;
-    const label = title && /\./.test(title) ? title : uri;
-    if (label) {
-      try { sources.add(new URL(label.startsWith('http') ? label : `https://${label}`).hostname.replace(/^www\./, '')); }
-      catch { sources.add(label); }
-    }
-  }
-
-  // ---- Call 2: strict structure ----
-  const structured = await timed('tradeEquipment.structure (schema)', async () => {
-    return await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [{ text: `Convert this research into the schema. Use the exact item names from the checklist. Any item not mentioned is "unknown".\n\nCHECKLIST ITEMS:\n${checklist}\n\nRESEARCH:\n${prose}` }] }],
-      config: {
-        temperature: 0,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            items: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  item: { type: Type.STRING, enum: [...EQUIPMENT_BOXES] },
-                  status: { type: Type.STRING, enum: ['standard', 'optional', 'no', 'unknown'] },
-                },
-                propertyOrdering: ['item', 'status'],
-                required: ['item', 'status'],
-              },
-            },
-            premiumAudioBrand: { type: Type.STRING },
-            smartphoneAppName: { type: Type.STRING },
-            notes: { type: Type.STRING },
-          },
-          propertyOrdering: ['items', 'premiumAudioBrand', 'smartphoneAppName', 'notes'],
-          required: ['items'],
+const responseSchema = {
+  type: Type.OBJECT,
+  properties: {
+    items: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          item: { type: Type.STRING, enum: [...EQUIPMENT_BOXES] },
+          status: { type: Type.STRING, enum: ['standard', 'optional', 'no', 'unknown'] },
         },
+        propertyOrdering: ['item', 'status'],
+        required: ['item', 'status'],
       },
-    });
-  });
+    },
+    premiumAudioBrand: { type: Type.STRING },
+    smartphoneAppName: { type: Type.STRING },
+    notes: { type: Type.STRING },
+  },
+  propertyOrdering: ['items', 'premiumAudioBrand', 'smartphoneAppName', 'notes'],
+  required: ['items'],
+};
 
-  let parsed: { items?: { item: string; status: EquipmentStatus }[]; premiumAudioBrand?: string; smartphoneAppName?: string; notes?: string };
-  try { parsed = JSON.parse(structured.text || '{}'); } catch { return null; }
+interface Parsed { items?: { item: string; status: EquipmentStatus }[]; premiumAudioBrand?: string; smartphoneAppName?: string; notes?: string }
 
+function finish(parsed: Parsed, sources: string[], verified: boolean, via: EquipmentLookupResult['via']): EquipmentLookupResult {
   const statuses: Record<string, EquipmentStatus> = {};
   for (const row of parsed.items ?? []) {
     if (EQUIPMENT_BOXES.includes(row.item)) statuses[row.item] = row.status;
   }
-  const clean = (v?: string) => { const t = (v ?? '').trim(); return t && !/^(none|n\/a|no)$/i.test(t) ? t : undefined; };
-
+  const clean = (v?: string) => { const t = (v ?? '').trim(); return t && !/^(none|n\/a|no|unknown)$/i.test(t) ? t : undefined; };
   return {
     statuses,
     premiumAudioBrand: clean(parsed.premiumAudioBrand),
     smartphoneAppName: clean(parsed.smartphoneAppName),
-    sources: [...sources],
+    sources,
+    verified,
+    via,
     notes: clean(parsed.notes),
   };
+}
+
+/**
+ * Call 1 of the grounded path: research with Google Search, terse output so it
+ * finishes in a reasonable time. Returns prose plus cited source domains.
+ */
+async function researchGrounded(input: { year: string; make: string; model: string; trim?: string }, model: string, timeoutMs: number) {
+  const vehicle = vehicleName(input);
+  const res = await timed(`tradeEquipment.research (${model}, grounded)`, () => ai.models.generateContent({
+    model,
+    contents: [{ role: 'user', parts: [{ text:
+`Research the factory equipment of the ${vehicle} (US market)${input.trim ? '' : ' (trim unknown: use the base trim and say so)'}.
+Use the manufacturer's site and reputable spec sites (Edmunds, KBB, Cars.com, Car and Driver).
+
+For EACH item below answer exactly one letter: S (standard on every ${input.trim ? 'unit of this trim' : 'base-trim unit'}), O (optional package or option on this trim), N (not offered on this trim), U (could not verify).
+Then two final lines: "Premium audio brand: <brand or none>" and "Smartphone app: <name or none>".
+
+${JUDGING_NOTES}
+
+Checklist:
+${checklist()}
+
+Output format, one line per item, nothing else: "<item>: <S|O|N|U>". Do not skip items. No explanations.` }] }],
+    config: { tools: [{ googleSearch: {} }], temperature: 0, httpOptions: { timeout: timeoutMs } },
+  }));
+  const prose = res.text ?? '';
+  const sources = new Set<string>();
+  for (const chunk of res.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []) {
+    const label = chunk.web?.uri || chunk.web?.title;
+    if (!label) continue;
+    try { sources.add(new URL(label.startsWith('http') ? label : `https://${label}`).hostname.replace(/^www\./, '')); }
+    catch { sources.add(label); }
+  }
+  return { prose, sources: [...sources] };
+}
+
+/** Call 2 of the grounded path: turn the letter list into the strict schema. Cheap and fast. */
+async function structure(prose: string, timeoutMs: number): Promise<Parsed> {
+  const res = await timed('tradeEquipment.structure (schema)', () => ai.models.generateContent({
+    model: FAST_MODEL,
+    contents: [{ role: 'user', parts: [{ text: `Convert this research into the schema. S=standard, O=optional, N=no, U=unknown. Use the exact item names from the checklist; any item not mentioned is "unknown".\n\nCHECKLIST ITEMS:\n${checklist()}\n\nRESEARCH:\n${prose}` }] }],
+    config: { temperature: 0, responseMimeType: 'application/json', responseSchema, httpOptions: { timeout: timeoutMs } },
+  }));
+  try { return JSON.parse(res.text || '{}'); } catch { return {}; }
+}
+
+/**
+ * Fallback path: one structured call from model knowledge, no web search.
+ * Roughly the 85-90% tier. Marked unverified so the card says so.
+ */
+async function fastLookup(input: { year: string; make: string; model: string; trim?: string }, timeoutMs: number): Promise<Parsed> {
+  const vehicle = vehicleName(input);
+  const res = await timed('tradeEquipment.fast (no search)', () => ai.models.generateContent({
+    model: FAST_MODEL,
+    contents: [{ role: 'user', parts: [{ text:
+`From your knowledge of the ${vehicle} (US market)${input.trim ? '' : ' (trim unknown: use the base trim)'}, classify each checklist item as standard on this trim, optional on this trim, not offered, or unknown. When you are not sure whether something was standard or an option, answer "optional", never "standard". Also give the premium audio brand if any and the maker's smartphone app name if it is not KiaConnect, uConnect, or Bluelink.
+
+${JUDGING_NOTES}
+
+Checklist:
+${checklist()}` }] }],
+    config: { temperature: 0, responseMimeType: 'application/json', responseSchema, httpOptions: { timeout: timeoutMs } },
+  }));
+  try { return JSON.parse(res.text || '{}'); } catch { return {}; }
+}
+
+/**
+ * Best available answer for the trim's equipment:
+ *   1. grounded research on gemini-2.5-flash (retry once on 503/429/timeout)
+ *   2. grounded research on gemini-2.0-flash (full mode only)
+ *   3. fast, ungrounded structured call (marked unverified)
+ * Returns null only if every path fails.
+ */
+export async function lookupTradeEquipment(
+  input: { year: string; make: string; model: string; trim?: string },
+  options: LookupOptions = {}
+): Promise<EquipmentLookupResult | null> {
+  if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set');
+  if (!input.year || !input.make || !input.model) return null;
+  const quick = !!options.quick;
+  const groundedTimeout = quick ? 30_000 : 45_000;
+
+  const attempts: { model: string; via: EquipmentLookupResult['via'] }[] = quick
+    ? [{ model: GROUNDED_MODEL, via: 'grounded-2.5' }]
+    : [{ model: GROUNDED_MODEL, via: 'grounded-2.5' }, { model: GROUNDED_MODEL, via: 'grounded-2.5' }, { model: GROUNDED_FALLBACK_MODEL, via: 'grounded-2.0' }];
+
+  let lastErr: unknown = null;
+  for (let i = 0; i < attempts.length; i++) {
+    const { model, via } = attempts[i];
+    try {
+      if (i > 0) await sleep(1500);
+      const { prose, sources } = await researchGrounded(input, model, groundedTimeout);
+      if (!prose.trim()) throw new Error('empty grounded response');
+      const parsed = await structure(prose, 20_000);
+      if (!parsed.items?.length) throw new Error('empty structured response');
+      return finish(parsed, sources, true, via);
+    } catch (err) {
+      lastErr = err;
+      console.warn(`Trade equipment lookup (${via}) failed:`, err);
+      if (!isRetryableGeminiError(err) && !/empty/.test(String(err))) break;
+    }
+  }
+
+  try {
+    const parsed = await fastLookup(input, 25_000);
+    if (!parsed.items?.length) throw new Error('empty fast response');
+    return finish(parsed, [], false, 'fast');
+  } catch (err) {
+    console.error('Trade equipment fast lookup failed:', err);
+    if (lastErr) console.error('Grounded lookup last error:', lastErr);
+    return null;
+  }
 }

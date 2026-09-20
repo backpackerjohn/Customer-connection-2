@@ -21,7 +21,7 @@ import { NavIconButton } from './components/NavIconButton';
 import { Customer, Note, Todo, TradeCheckIn, emptyCustomer } from './types';
 import { decodeVinRecord } from './services/vinService';
 import { vinFactsFromRecord } from './lib/vinDecodeMap';
-import { lookupTradeEquipment, UNVERIFIED_SOURCES } from './services/tradeEquipmentService';
+import { lookupTradeEquipment, EquipmentLookupError, UNVERIFIED_SOURCES } from './services/tradeEquipmentService';
 import { normalizeBoxes, setBox } from './lib/tradeCheckInSheet';
 import { createCustomer, updateCustomer, subscribeToCustomers } from './services/customersService';
 import { createNote, subscribeToNotes, subscribeToAllNotes } from './services/notesService';
@@ -519,9 +519,11 @@ export default function App() {
    * boxes: drivetrain, doors, fuel, engine, cab/bed, reported safety features),
    * then a grounded Gemini lookup of the trim's standard/optional equipment.
    * Standard equipment is ticked; optional is flagged for the associate to
-   * confirm at the car. Returns the customer patch, or throws with a message.
+   * confirm at the car. Returns the customer patch plus a warning when the
+   * equipment lookup failed (the VIN facts are still kept). Throws only when
+   * there is nothing to look up.
    */
-  const runTradeLookup = async (customer: Customer, options: { quick?: boolean } = {}): Promise<Partial<Customer>> => {
+  const runTradeLookup = async (customer: Customer, options: { quick?: boolean } = {}): Promise<{ patch: Partial<Customer>; warning?: string }> => {
     const vin = (customer.tradeVin ?? '').trim().toUpperCase();
     const record = vin.length === 17 ? await decodeVinRecord(vin) : null;
     const facts = record ? vinFactsFromRecord(record) : null;
@@ -536,7 +538,14 @@ export default function App() {
         : 'Enter a 17-character trade VIN, or year, make, and model, then look up.');
     }
 
-    const lookup = await lookupTradeEquipment({ year, make, model, trim: trim || undefined }, options);
+    let lookup = null;
+    let warning: string | undefined;
+    try {
+      lookup = await lookupTradeEquipment({ year, make, model, trim: trim || undefined }, options);
+    } catch (err) {
+      if (!(err instanceof EquipmentLookupError)) throw err;
+      warning = `Equipment lookup failed: ${err.message} VIN facts were kept; tick the equipment boxes by hand or retry.`;
+    }
     const prev = customer.tradeCheckIn;
 
     // VIN facts first (exclusive groups respected), then manufacturer-reported
@@ -565,7 +574,8 @@ export default function App() {
       sources: lookup
         ? (lookup.verified && lookup.sources.length ? lookup.sources.join(', ') : UNVERIFIED_SOURCES)
         : undefined,
-      lookedUpAt: new Date().toISOString(),
+      // Only stamp a successful lookup so the next print retries after a failure.
+      lookedUpAt: lookup ? new Date().toISOString() : prev?.lookedUpAt,
     };
     // Drop undefined values so Firestore never sees them.
     const cleanCheckIn = Object.fromEntries(Object.entries(checkIn).filter(([, v]) => v !== undefined)) as unknown as TradeCheckIn;
@@ -577,7 +587,7 @@ export default function App() {
     if (!customer.tradeModel && model) identity.tradeModel = model;
     if (!customer.tradeTrim && trim) identity.tradeTrim = trim;
 
-    return { ...identity, tradeCheckIn: cleanCheckIn };
+    return { patch: { ...identity, tradeCheckIn: cleanCheckIn }, warning };
   };
 
   const handleTradeLookup = async () => {
@@ -585,8 +595,9 @@ export default function App() {
     setIsTradeLookingUp(true);
     setTradeLookupError(null);
     try {
-      const patch = await runTradeLookup(currentCustomer);
+      const { patch, warning } = await runTradeLookup(currentCustomer);
       updateCustomerState(patch);
+      if (warning) setTradeLookupError(warning);
     } catch (err) {
       console.error('Trade lookup failed:', err);
       setTradeLookupError(err instanceof Error ? err.message : 'Lookup failed. Try again.');
@@ -623,8 +634,9 @@ export default function App() {
       try {
         setIsTradeLookingUp(true);
         // Quick mode: one grounded attempt, then model knowledge, so the print is not held up.
-        const patch = await runTradeLookup(customer, { quick: true });
+        const { patch, warning } = await runTradeLookup(customer, { quick: true });
         updateCustomerState(patch);
+        if (warning) setTradeLookupError(warning);
         toPrint = { ...customer, ...patch };
       } catch (err) {
         console.warn('Trade lookup skipped:', err);

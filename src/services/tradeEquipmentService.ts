@@ -17,7 +17,7 @@ export interface EquipmentLookupResult {
   /** True when the answer came from a live web search; false when it came from model knowledge only. */
   verified: boolean;
   /** Which path produced the answer, for the log. */
-  via: 'grounded-2.5' | 'grounded-2.0' | 'fast';
+  via: 'grounded-2.5' | 'grounded-lite' | 'fast';
   notes?: string;
 }
 
@@ -34,8 +34,10 @@ export interface LookupOptions {
 }
 
 const GROUNDED_MODEL = 'gemini-2.5-flash';
-const GROUNDED_FALLBACK_MODEL = 'gemini-2.0-flash';
-const FAST_MODEL = 'gemini-2.5-flash';
+// A different model family member for the fallbacks, so a "high demand" 503 on
+// gemini-2.5-flash does not take every attempt down with it.
+const GROUNDED_FALLBACK_MODEL = 'gemini-2.5-flash-lite';
+const FAST_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'] as const;
 
 const checklist = () => EQUIPMENT_BOXES.map(b => `- ${b}`).join('\n');
 const vehicleName = (i: { year: string; make: string; model: string; trim?: string }) =>
@@ -134,7 +136,7 @@ Output format, one line per item, nothing else: "<item>: <S|O|N|U>". Do not skip
 /** Call 2 of the grounded path: turn the letter list into the strict schema. Cheap and fast. */
 async function structure(prose: string, timeoutMs: number): Promise<Parsed> {
   const res = await timed('tradeEquipment.structure (schema)', () => ai.models.generateContent({
-    model: FAST_MODEL,
+    model: FAST_MODELS[0],
     contents: [{ role: 'user', parts: [{ text: `Convert this research into the schema. S=standard, O=optional, N=no, U=unknown. Use the exact item names from the checklist; any item not mentioned is "unknown".\n\nCHECKLIST ITEMS:\n${checklist()}\n\nRESEARCH:\n${prose}` }] }],
     config: { temperature: 0, responseMimeType: 'application/json', responseSchema, httpOptions: { timeout: timeoutMs } },
   }));
@@ -145,10 +147,10 @@ async function structure(prose: string, timeoutMs: number): Promise<Parsed> {
  * Fallback path: one structured call from model knowledge, no web search.
  * Roughly the 85-90% tier. Marked unverified so the card says so.
  */
-async function fastLookup(input: { year: string; make: string; model: string; trim?: string }, timeoutMs: number): Promise<Parsed> {
+async function fastLookup(input: { year: string; make: string; model: string; trim?: string }, model: string, timeoutMs: number): Promise<Parsed> {
   const vehicle = vehicleName(input);
-  const res = await timed('tradeEquipment.fast (no search)', () => ai.models.generateContent({
-    model: FAST_MODEL,
+  const res = await timed(`tradeEquipment.fast (${model}, no search)`, () => ai.models.generateContent({
+    model,
     contents: [{ role: 'user', parts: [{ text:
 `From your knowledge of the ${vehicle} (US market)${input.trim ? '' : ' (trim unknown: use the base trim)'}, classify each checklist item as standard on this trim, optional on this trim, not offered, or unknown. When you are not sure whether something was standard or an option, answer "optional", never "standard". Also give the premium audio brand if any and the maker's smartphone app name if it is not KiaConnect, uConnect, or Bluelink.
 
@@ -164,9 +166,10 @@ ${checklist()}` }] }],
 /**
  * Best available answer for the trim's equipment:
  *   1. grounded research on gemini-2.5-flash (retry once on 503/429/timeout)
- *   2. grounded research on gemini-2.0-flash (full mode only)
- *   3. fast, ungrounded structured call (marked unverified)
- * Returns null only if every path fails.
+ *   2. grounded research on gemini-2.5-flash-lite (full mode only)
+ *   3. fast, ungrounded structured call on 2.5-flash, then 2.5-flash-lite (marked unverified)
+ * Returns null only when the input is incomplete; throws EquipmentLookupError
+ * when every path fails, so the caller can tell the dealer why.
  */
 export async function lookupTradeEquipment(
   input: { year: string; make: string; model: string; trim?: string },
@@ -179,7 +182,7 @@ export async function lookupTradeEquipment(
 
   const attempts: { model: string; via: EquipmentLookupResult['via'] }[] = quick
     ? [{ model: GROUNDED_MODEL, via: 'grounded-2.5' }]
-    : [{ model: GROUNDED_MODEL, via: 'grounded-2.5' }, { model: GROUNDED_MODEL, via: 'grounded-2.5' }, { model: GROUNDED_FALLBACK_MODEL, via: 'grounded-2.0' }];
+    : [{ model: GROUNDED_MODEL, via: 'grounded-2.5' }, { model: GROUNDED_MODEL, via: 'grounded-2.5' }, { model: GROUNDED_FALLBACK_MODEL, via: 'grounded-lite' }];
 
   let lastErr: unknown = null;
   for (let i = 0; i < attempts.length; i++) {
@@ -198,13 +201,36 @@ export async function lookupTradeEquipment(
     }
   }
 
-  try {
-    const parsed = await fastLookup(input, 25_000);
-    if (!parsed.items?.length) throw new Error('empty fast response');
-    return finish(parsed, [], false, 'fast');
-  } catch (err) {
-    console.error('Trade equipment fast lookup failed:', err);
-    if (lastErr) console.error('Grounded lookup last error:', lastErr);
-    return null;
+  for (const model of FAST_MODELS) {
+    try {
+      const parsed = await fastLookup(input, model, 25_000);
+      if (!parsed.items?.length) throw new Error('empty fast response');
+      return finish(parsed, [], false, 'fast');
+    } catch (err) {
+      lastErr = err;
+      console.warn(`Trade equipment fast lookup (${model}) failed:`, err);
+    }
   }
+
+  console.error('Every trade equipment lookup path failed. Last error:', lastErr);
+  throw new EquipmentLookupError(summarizeGeminiError(lastErr));
+}
+
+/** Thrown when every Gemini path failed; the message is short enough for the card. */
+export class EquipmentLookupError extends Error {
+  constructor(message: string) { super(message); this.name = 'EquipmentLookupError'; }
+}
+
+/** One line a dealer can read, e.g. "Gemini is overloaded (503)". */
+export function summarizeGeminiError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const code = msg.match(/"code":\s*(\d{3})/)?.[1];
+  if (code === '503' || /high demand|overloaded|UNAVAILABLE/i.test(msg)) return 'Gemini is overloaded (503). Try again in a minute.';
+  if (code === '429' || /RESOURCE_EXHAUSTED/i.test(msg)) return 'Gemini rate limit hit (429). Wait a minute and try again.';
+  if (/timed? ?out|aborted/i.test(msg)) return 'Gemini did not answer in time. Try again.';
+  if (code === '400' && /tool|googleSearch|grounding/i.test(msg)) return 'This API key cannot use Google Search grounding.';
+  if (code === '403' || /API key|PERMISSION_DENIED/i.test(msg)) return 'Gemini rejected the API key (403).';
+  if (code === '404' || /not found/i.test(msg)) return 'Gemini model not found (404). Check the model ids in tradeEquipmentService.';
+  const status = msg.match(/"status":\s*"([A-Z_]+)"/)?.[1];
+  return status ? `Gemini error ${code ?? ''} ${status}`.replace(/\s+/g, ' ').trim() : msg.slice(0, 120);
 }

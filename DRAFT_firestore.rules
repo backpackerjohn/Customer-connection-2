@@ -40,87 +40,90 @@ service cloud.firestore {
         && (data.get('working', false) is bool)
 
         // Personal info
-        && (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 100))
-        && (!('middleInitial' in data) || (data.middleInitial is string && data.middleInitial.size() <= 10))
-        && (!('lastName' in data) || (data.lastName is string && data.lastName.size() <= 100))
-        && (!('dob' in data) || (data.dob is string && data.dob.size() <= 20))
-        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 20))
-        && (!('email' in data) || (data.email is string && data.email.size() <= 200))
-        && (!('address' in data) || (data.address is string && data.address.size() <= 200))
-        && (!('city' in data) || (data.city is string && data.city.size() <= 100))
-        && (!('state' in data) || (data.state is string && data.state.size() <= 50))
-        && (!('zip' in data) || (data.zip is string && data.zip.size() <= 20))
+        && data.get('firstName', '').size() <= 100
+        && data.get('middleInitial', '').size() <= 10
+        && data.get('lastName', '').size() <= 100
+        && data.get('dob', '').size() <= 20
+        && data.get('phone', '').size() <= 20
+        && data.get('email', '').size() <= 200
+        && data.get('address', '').size() <= 200
+        && data.get('city', '').size() <= 100
+        && data.get('state', '').size() <= 50
+        && data.get('zip', '').size() <= 20
 
         // License + Vehicle
-        && (!('dlNumber' in data) || (data.dlNumber is string && data.dlNumber.size() <= 50))
-        && (!('dlState' in data) || (data.dlState is string && data.dlState.size() <= 50))
-        && (!('dlExpiration' in data) || (data.dlExpiration is string && data.dlExpiration.size() <= 20))
-        && (!('dlImageUrl' in data) || (data.dlImageUrl is string && data.dlImageUrl.size() <= 1024))
-        && (!('vehicleStock' in data) || (data.vehicleStock is string && data.vehicleStock.size() <= 50))
-        && (!('vehicleYear' in data) || (data.vehicleYear is string && data.vehicleYear.size() <= 10))
-        && (!('vehicleMake' in data) || (data.vehicleMake is string && data.vehicleMake.size() <= 50))
-        && (!('vehicleModel' in data) || (data.vehicleModel is string && data.vehicleModel.size() <= 50))
-        && (!('vehicleVin' in data) || (data.vehicleVin is string && data.vehicleVin.size() <= 50))
-        && (!('vehicleMiles' in data) || (data.vehicleMiles is string && data.vehicleMiles.size() <= 20))
+        && data.get('dlNumber', '').size() <= 50
+        && data.get('dlState', '').size() <= 50
+        && data.get('dlExpiration', '').size() <= 20
+        && data.get('dlImageUrl', '').size() <= 1024
+        && data.get('vehicleStock', '').size() <= 50
+        && data.get('vehicleYear', '').size() <= 10
+        && data.get('vehicleMake', '').size() <= 50
+        && data.get('vehicleModel', '').size() <= 50
+        && data.get('vehicleVin', '').size() <= 50
+        && data.get('vehicleMiles', '').size() <= 20
 
         // Insurance + Trade
-        && (!('insuranceCompany' in data) || (data.insuranceCompany is string && data.insuranceCompany.size() <= 100))
-        && (!('insuranceImageUrl' in data) || (data.insuranceImageUrl is string && data.insuranceImageUrl.size() <= 1024))
-        && (!('agentName' in data) || (data.agentName is string && data.agentName.size() <= 100))
-        && (!('tradeYear' in data) || (data.tradeYear is string && data.tradeYear.size() <= 10))
-        && (!('tradeMake' in data) || (data.tradeMake is string && data.tradeMake.size() <= 50))
-        && (!('tradeModel' in data) || (data.tradeModel is string && data.tradeModel.size() <= 50))
-        && (!('tradeTrim' in data) || (data.tradeTrim is string && data.tradeTrim.size() <= 50))
-        && (!('tradeMileage' in data) || (data.tradeMileage is string && data.tradeMileage.size() <= 20))
-        && (!('tradeVin' in data) || (data.tradeVin is string && data.tradeVin.size() <= 50))
+        && data.get('insuranceCompany', '').size() <= 100
+        && data.get('insuranceImageUrl', '').size() <= 1024
+        && data.get('agentName', '').size() <= 100
+        && data.get('tradeYear', '').size() <= 10
+        && data.get('tradeMake', '').size() <= 50
+        && data.get('tradeModel', '').size() <= 50
+        && data.get('tradeTrim', '').size() <= 50
+        && data.get('tradeMileage', '').size() <= 20
+        && data.get('tradeVin', '').size() <= 50
 
         // Finance + Goals
-        && (!('lienholder' in data) || (data.lienholder is string && data.lienholder.size() <= 100))
-        && (!('payoffAmount' in data) || (data.payoffAmount is string && data.payoffAmount.size() <= 20))
-        && (!('monthlyPayment' in data) || (data.monthlyPayment is string && data.monthlyPayment.size() <= 20))
-        && (!('monthsRemaining' in data) || (data.monthsRemaining is string && data.monthsRemaining.size() <= 20))
-        && (!('goalsMonthlyPayment' in data) || (data.goalsMonthlyPayment is string && data.goalsMonthlyPayment.size() <= 50))
-        && (!('goalsMoneyDown' in data) || (data.goalsMoneyDown is string && data.goalsMoneyDown.size() <= 20))
-        && (!('goalsCreditScore' in data) || (data.goalsCreditScore is string && data.goalsCreditScore.size() <= 20))
-        && (!('customerDesiredTradeValue' in data) || (data.customerDesiredTradeValue is string && data.customerDesiredTradeValue.size() <= 20))
+        && data.get('lienholder', '').size() <= 100
+        && data.get('payoffAmount', '').size() <= 20
+        && data.get('monthlyPayment', '').size() <= 20
+        && data.get('monthsRemaining', '').size() <= 20
+        && data.get('goalsMonthlyPayment', '').size() <= 50
+        && data.get('goalsMoneyDown', '').size() <= 20
+        && data.get('goalsCreditScore', '').size() <= 20
+        && data.get('customerDesiredTradeValue', '').size() <= 20
 
         // Trade values (low/high + per-condition tiers + metadata)
-        && (!('tradeValueLow' in data) || (data.tradeValueLow is string && data.tradeValueLow.size() <= 20))
-        && (!('tradeValueHigh' in data) || (data.tradeValueHigh is string && data.tradeValueHigh.size() <= 20))
-        && (!('tradeValueExcellentLow' in data) || (data.tradeValueExcellentLow is string && data.tradeValueExcellentLow.size() <= 20))
-        && (!('tradeValueExcellentHigh' in data) || (data.tradeValueExcellentHigh is string && data.tradeValueExcellentHigh.size() <= 20))
-        && (!('tradeValueVeryGoodLow' in data) || (data.tradeValueVeryGoodLow is string && data.tradeValueVeryGoodLow.size() <= 20))
-        && (!('tradeValueVeryGoodHigh' in data) || (data.tradeValueVeryGoodHigh is string && data.tradeValueVeryGoodHigh.size() <= 20))
-        && (!('tradeValueGoodLow' in data) || (data.tradeValueGoodLow is string && data.tradeValueGoodLow.size() <= 20))
-        && (!('tradeValueGoodHigh' in data) || (data.tradeValueGoodHigh is string && data.tradeValueGoodHigh.size() <= 20))
-        && (!('tradeValueFairLow' in data) || (data.tradeValueFairLow is string && data.tradeValueFairLow.size() <= 20))
-        && (!('tradeValueFairHigh' in data) || (data.tradeValueFairHigh is string && data.tradeValueFairHigh.size() <= 20))
-        && (!('tradeValueSource' in data) || (data.tradeValueSource is string && data.tradeValueSource.size() <= 100))
-        && (!('tradeValueCondition' in data) || (data.tradeValueCondition is string && data.tradeValueCondition.size() <= 20))
-        && (!('tradeValueAt' in data) || (data.tradeValueAt is string && data.tradeValueAt.size() <= 30))
+        && data.get('tradeValueLow', '').size() <= 20
+        && data.get('tradeValueHigh', '').size() <= 20
+        && data.get('tradeValueExcellentLow', '').size() <= 20
+        && data.get('tradeValueExcellentHigh', '').size() <= 20
+        && data.get('tradeValueVeryGoodLow', '').size() <= 20
+        && data.get('tradeValueVeryGoodHigh', '').size() <= 20
+        && data.get('tradeValueGoodLow', '').size() <= 20
+        && data.get('tradeValueGoodHigh', '').size() <= 20
+        && data.get('tradeValueFairLow', '').size() <= 20
+        && data.get('tradeValueFairHigh', '').size() <= 20
+        && data.get('tradeValueSource', '').size() <= 100
+        && data.get('tradeValueCondition', '').size() <= 20
+        && data.get('tradeValueAt', '').size() <= 30
 
         // Reminders
-        && (!('lastContactedAt' in data) || (data.lastContactedAt is string && data.lastContactedAt.size() <= 30))
-        && (!('nextCadenceDue' in data) || (data.nextCadenceDue is string && data.nextCadenceDue.size() <= 30))
-        && (!('manualReminders' in data) || (data.manualReminders is list && data.manualReminders.size() <= 50))
-        && (!('purchaseDate' in data) || (data.purchaseDate is string && data.purchaseDate.size() <= 30))
-        && (!('referralAskedAt' in data) || (data.referralAskedAt is string && data.referralAskedAt.size() <= 30))
+        && data.get('lastContactedAt', '').size() <= 30
+        && data.get('nextCadenceDue', '').size() <= 30
+        && data.get('manualReminders', []) is list && data.get('manualReminders', []).size() <= 50
+        && data.get('purchaseDate', '').size() <= 30
+        && data.get('referralAskedAt', '').size() <= 30
 
         // Bulk Intake lead metadata
-        && (!('leadSource' in data) || (data.leadSource is string && data.leadSource.size() <= 200))
-        && (!('leadSourceType' in data) || (data.leadSourceType is string && data.leadSourceType.size() <= 30))
-        && (!('leadGeneratedDate' in data) || (data.leadGeneratedDate is string && data.leadGeneratedDate.size() <= 20))
-        && (!('pendingInterestNotes' in data) || (data.pendingInterestNotes is string && data.pendingInterestNotes.size() <= 500))
+        && data.get('leadSource', '').size() <= 200
+        && data.get('leadSourceType', '').size() <= 30
+        && data.get('leadGeneratedDate', '').size() <= 20
+        && data.get('pendingInterestNotes', '').size() <= 500
 
         // Communication channel
-        && (!('contactChannel' in data) || (data.contactChannel is string && data.contactChannel.size() <= 30))
+        && data.get('contactChannel', '').size() <= 30
 
         // Trade check-in (Buyers Guide / Check-In Sheet packet)
-        && (!('tradeIsBLine' in data) || data.tradeIsBLine is bool)
-        && (!('tradeStockNumber' in data) || (data.tradeStockNumber is string && data.tradeStockNumber.size() <= 20))
-        && (!('tradeCheckIn' in data) || (data.tradeCheckIn is map && data.tradeCheckIn.size() <= 12
-            && data.tradeCheckIn.get('equipment', []) is list && data.tradeCheckIn.get('equipment', []).size() <= 150
-            && data.tradeCheckIn.get('unsure', []) is list && data.tradeCheckIn.get('unsure', []).size() <= 150));
+        && data.get('tradeIsBLine', false) is bool
+        && data.get('tradeStockNumber', '').size() <= 20
+        && data.get('tradeCheckIn', {}) is map
+        && data.get('tradeCheckIn', {}).size() <= 12
+        && data.get('tradeCheckIn', {}).get('equipment', []) is list
+        && data.get('tradeCheckIn', {}).get('equipment', []).size() <= 150
+        && data.get('tradeCheckIn', {}).get('unsure', []) is list
+        && data.get('tradeCheckIn', {}).get('unsure', []).size() <= 150;
     }
 
     function isValidNote(data) {

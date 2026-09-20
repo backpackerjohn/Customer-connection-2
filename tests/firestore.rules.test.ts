@@ -508,4 +508,38 @@ describe('Firestore rules — Customer collection', () => {
       }))
     );
   });
+  // --- Rules evaluation budget ---
+  // Firestore evaluates at most 1000 expressions per rule. A dealer's real
+  // customer doc has most of these keys populated; before the validator was
+  // rewritten in the cheap `data.get('x', '').size() <= N` form, ~40 populated
+  // keys was enough to be denied with "maximum of 1000 expressions". This test
+  // populates EVERY key the create rule allows and must keep passing.
+  it('42. fully populated customer (every allowed key) creates and updates within the rules budget', async () => {
+    const keyList = readFileSync('firestore.rules', 'utf8').match(/keys\(\)\.hasOnly\(\[([\s\S]*?)\]\)/);
+    if (!keyList) throw new Error('create rule hasOnly list not found');
+    const keys = [...keyList[1].matchAll(/'(\w+)'/g)].map(m => m[1]);
+    if (keys.length < 60) throw new Error(`expected the full key list, got ${keys.length}`);
+    const bools = new Set(['hasTradeIn', 'stillOwe', 'payingCash', 'working', 'tradeIsBLine']);
+    const full: Record<string, unknown> = {};
+    for (const k of keys) {
+      if (bools.has(k)) full[k] = true;
+      else if (k === 'createdBy') full[k] = 'user_alice';
+      else if (k === 'createdAt' || k === 'updatedAt') full[k] = serverTimestamp();
+      else if (k === 'status') full[k] = 'lead';
+      else if (k === 'manualReminders') full[k] = [{ date: '2026-10-01', reason: 'call' }];
+      else if (k === 'tradeCheckIn') full[k] = {
+        equipment: Array.from({ length: 60 }, (_, i) => `Box ${i}`), unsure: ['A', 'B'],
+        engine: '3.5L V6', cylinders: '6', transmissionSpeeds: '10', extColor: 'White', intColor: 'Black',
+        premiumAudioBrand: 'Bose', smartphoneAppName: 'FordPass', trim: 'XLT', sources: 'ford.com', lookedUpAt: '2026-09-20T00:00:00.000Z',
+      };
+      else full[k] = '2023'; // short enough for every string cap
+    }
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(setDoc(doc(aliceDb, 'customers/full'), full));
+    await assertSucceeds(updateDoc(doc(aliceDb, 'customers/full'), { phone: '555-000-0000', updatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(aliceDb, 'customers/full'), {
+      tradeCheckIn: { ...(full.tradeCheckIn as object), extColor: 'Red' }, updatedAt: serverTimestamp(),
+    }));
+  });
 });
+

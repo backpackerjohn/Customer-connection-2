@@ -32,6 +32,14 @@ service cloud.firestore {
     }
 
     // --- Customer Validation ---
+    // BUDGET NOTE: Firestore evaluates at most 1000 expressions per rule. The
+    // old `(!('x' in data) || (data.x is string && data.x.size() <= N))` form
+    // cost ~13 expressions per populated field and a customer with ~40 filled
+    // fields was denied outright. `data.get('x', '').size() <= N` costs ~7 and
+    // is constant whether or not the field is present. Type safety comes from
+    // the fact that .size() errors (= deny) on numbers, bools, timestamps and
+    // null; a list or map would pass the length cap, which the 1 MB document
+    // limit already bounds. Keep every line in this cheap form.
     function isValidCustomer(data) {
       return (data.get('status', 'lead') in ['lead', 'sold', 'inactive'])
         && (data.get('hasTradeIn', false) is bool)

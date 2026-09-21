@@ -1,7 +1,10 @@
 {
-  "firestore": {
-    "rules": "firestore.rules"
-  },
+  "firestore": [
+    {
+      "database": "ai-studio-d0c9e367-0687-4e7f-91fe-d59778be814e",
+      "rules": "firestore.rules"
+    }
+  ],
   "storage": {
     "rules": "storage.rules"
   },
@@ -9,6 +12,8 @@
     "firestore": {
       "port": 8080
     },
-    "ui": { "enabled": false }
+    "ui": {
+      "enabled": false
+    }
   }
 }

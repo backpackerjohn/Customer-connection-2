@@ -249,7 +249,7 @@ export function summarizeGeminiError(err: unknown): string {
   if (code === '400' && /tool|googleSearch|grounding/i.test(msg)) return 'this API key cannot use Google Search grounding (400)';
   if (code === '400') return `Gemini rejected the request (400): ${(msg.match(/"message":\s*"([^"]{0,80})/)?.[1] ?? '').trim()}`.trim();
   if (code === '403' || /API key|PERMISSION_DENIED/i.test(msg)) return 'Gemini rejected the API key (403)';
-  if (code === '404' || /not found/i.test(msg)) return 'Gemini model not found (404)';
+  if (code === '404' || /not found/i.test(msg)) return `Gemini 404: ${(msg.match(/"message":\s*"([^"]{0,120})/)?.[1] ?? msg.slice(0, 120)).trim()}`;
   const status = msg.match(/"status":\s*"([A-Z_]+)"/)?.[1];
   return status ? `Gemini error ${code ?? ''} ${status}`.replace(/\s+/g, ' ').trim() : msg.slice(0, 120);
 }

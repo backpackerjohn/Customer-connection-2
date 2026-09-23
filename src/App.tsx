@@ -22,7 +22,7 @@ import { Customer, Note, Todo, TradeCheckIn, emptyCustomer } from './types';
 import { decodeVinRecord } from './services/vinService';
 import { vinFactsFromRecord } from './lib/vinDecodeMap';
 import { lookupTradeEquipment, EquipmentLookupError, UNVERIFIED_SOURCES } from './services/tradeEquipmentService';
-import { normalizeBoxes, setBox } from './lib/tradeCheckInSheet';
+import { factGroupAnswered, normalizeBoxes, setBox } from './lib/tradeCheckInSheet';
 import { createCustomer, updateCustomer, subscribeToCustomers } from './services/customersService';
 import { createNote, subscribeToNotes, subscribeToAllNotes } from './services/notesService';
 import { createContact } from './services/contactsService';
@@ -550,11 +550,16 @@ export default function App() {
 
     // VIN facts first (exclusive groups respected), then manufacturer-reported
     // standard safety features, then everything the lookup called standard.
+    // For the single-choice fact groups (drive, doors, fuel, transmission, cab,
+    // bed) the lookup only fills what the VIN decode left blank: NHTSA is the
+    // authority on the exact car, the lookup only knows the trim.
+    const factBoxes = facts?.boxes ?? [];
     let equipment: string[] = [];
-    for (const b of facts?.boxes ?? []) equipment = setBox(equipment, b, true);
+    for (const b of factBoxes) equipment = setBox(equipment, b, true);
     for (const b of facts?.standardFeatures ?? []) equipment = setBox(equipment, b, true);
     const unsure: string[] = [];
     for (const [box, status] of Object.entries(lookup?.statuses ?? {})) {
+      if (factGroupAnswered(box, factBoxes)) continue;
       if (status === 'standard') equipment = setBox(equipment, box, true);
       else if (status === 'optional') unsure.push(box);
     }
@@ -565,7 +570,7 @@ export default function App() {
       unsure: normalizeBoxes(unsure.filter(b => !equipment.includes(b))),
       engine: facts?.engine || prev?.engine,
       cylinders: facts?.cylinders || prev?.cylinders,
-      transmissionSpeeds: facts?.transmissionSpeeds || prev?.transmissionSpeeds,
+      transmissionSpeeds: facts?.transmissionSpeeds || lookup?.transmissionSpeeds || prev?.transmissionSpeeds,
       extColor: prev?.extColor,
       intColor: prev?.intColor,
       premiumAudioBrand: lookup?.premiumAudioBrand ?? prev?.premiumAudioBrand,

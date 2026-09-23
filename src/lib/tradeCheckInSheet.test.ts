@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ALL_GROUPS, APP_BOXES, HAND_FILLED_BOXES, EQUIPMENT_BOXES, normalizeBoxes, setBox } from './tradeCheckInSheet';
+import { ALL_GROUPS, APP_BOXES, HAND_FILLED_BOXES, EQUIPMENT_BOXES, factGroupAnswered, normalizeBoxes, setBox } from './tradeCheckInSheet';
 
 describe('tradeCheckInSheet registry', () => {
   it('has no duplicate box names across groups', () => {
@@ -34,5 +34,14 @@ describe('setBox', () => {
   });
   it('ignores names that are not app boxes', () => {
     expect(setBox(['Leather'], 'Salvage Title - Yes', true)).toEqual(['Leather']);
+  });
+});
+
+describe('factGroupAnswered', () => {
+  it('is true only for a single-choice VIN-fact group the decode already filled', () => {
+    expect(factGroupAnswered('AWD', ['FWD', '4 Doors'])).toBe(true);
+    expect(factGroupAnswered('Automatic Transmission', ['FWD', '4 Doors'])).toBe(false);
+    expect(factGroupAnswered('Leather', ['FWD'])).toBe(false);
+    expect(factGroupAnswered('Convertible', ['FWD'])).toBe(false); // body group is not exclusive
   });
 });

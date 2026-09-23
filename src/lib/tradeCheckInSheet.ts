@@ -74,6 +74,18 @@ export function normalizeBoxes(names: readonly string[] | undefined | null): str
   return out;
 }
 
+/** The group a box belongs to, or undefined for a hand-filled / unknown name. */
+export function groupOf(box: string): SheetGroup | undefined {
+  return ALL_GROUPS.find(g => g.boxes.includes(box));
+}
+
+/** True when the VIN decode already answered this box's single-choice group (drive, doors, fuel, ...). */
+export function factGroupAnswered(box: string, factBoxes: readonly string[]): boolean {
+  const group = groupOf(box);
+  if (!group?.exclusive || !VIN_FACT_GROUPS.includes(group)) return false;
+  return factBoxes.some(b => group.boxes.includes(b));
+}
+
 /** Tick one box in an exclusive group, clearing its siblings. Non-exclusive groups just add. */
 export function setBox(current: readonly string[], box: string, on: boolean): string[] {
   if (!APP_BOX_SET.has(box)) return [...current];

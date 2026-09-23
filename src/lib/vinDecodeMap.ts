@@ -81,7 +81,7 @@ export function vinFactsFromRecord(r: VinRecord): VinFacts {
   const layout = /v-shaped|v /.test(config) ? 'V' : /in-line|inline/.test(config) ? 'I' : /flat|boxer/.test(config) ? 'H' : '';
   const engineParts: string[] = [];
   if (Number.isFinite(liters) && liters > 0) engineParts.push(`${liters.toFixed(1)}L`);
-  if (Number.isInteger(cyl) && cyl > 0) engineParts.push(`${layout}${cyl}`);
+  if (Number.isInteger(cyl) && cyl > 0) engineParts.push(layout ? `${layout}${cyl}` : `${cyl}-cyl`);
   const engine = engineParts.join(' ');
   const cylinders = Number.isInteger(cyl) && cyl > 0 ? String(cyl) : '';
   const speeds = parseInt(r.TransmissionSpeeds ?? '', 10);

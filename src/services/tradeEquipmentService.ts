@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { timed } from '../lib/timing';
-import { EQUIPMENT_BOXES } from '../lib/tradeCheckInSheet';
+import { APP_BOXES, APP_BOX_SET } from '../lib/tradeCheckInSheet';
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
@@ -12,6 +12,8 @@ export interface EquipmentLookupResult {
   /** Free-text extras the sheet has a line for. */
   premiumAudioBrand?: string;
   smartphoneAppName?: string;
+  /** Number of forward gears on the standard transmission, e.g. "6". Used only when the VIN decode has none. */
+  transmissionSpeeds?: string;
   /** Distinct source domains the grounded call cited. Empty when not web-verified. */
   sources: string[];
   /** True when the answer came from a live web search; false when it came from model knowledge only. */
@@ -44,7 +46,7 @@ const MODEL = 'gemini-2.5-flash';
 const RESEARCH_THINKING = { thinkingBudget: 512 };
 const NO_THINKING = { thinkingBudget: 0 };
 
-const checklist = () => EQUIPMENT_BOXES.map(b => `- ${b}`).join('\n');
+const checklist = () => APP_BOXES.map(b => `- ${b}`).join('\n');
 const vehicleName = (i: { year: string; make: string; model: string; trim?: string }) =>
   [i.year, i.make, i.model, i.trim].filter(Boolean).join(' ').trim();
 
@@ -52,7 +54,10 @@ const JUDGING_NOTES = `Notes for judging:
 - "Cloth" and "Leather" describe the seat material of the trim.
 - "Rear Window" means a rear window on a truck cab; "Rear Window Defrost" and "Rear Window Wiper" are separate.
 - "Smartphone App Integration" means the maker's remote app (e.g. HondaLink, FordPass, MySubaru, Toyota app).
-- Tick "AC" for any air conditioning; "Climate Control" only for automatic/dual-zone climate control.`;
+- Tick "AC" for any air conditioning; "Climate Control" only for automatic/dual-zone climate control.
+- Drivetrain, Transmission, Doors, Fuel, Cab and Bed are single-choice groups: answer S for the configuration that is standard on this trim and O for a factory option (a front-drive SUV with optional AWD is "FWD: S" and "AWD: O"). "4x4" and "4x2" are for trucks and body-on-frame SUVs; cars and crossovers use FWD/RWD/AWD.
+- Doors counts passenger doors only; a hatch or tailgate does not count, so most sedans, hatchbacks and SUVs are "4 Doors".
+- "Transmission speeds" is the number of forward gears of the standard transmission (a CVT is "CVT").`;
 
 /** 503 / 429 / timeouts are worth retrying or falling back on; 400s are not. */
 export function isRetryableGeminiError(err: unknown): boolean {
@@ -70,7 +75,7 @@ const responseSchema = {
       items: {
         type: Type.OBJECT,
         properties: {
-          item: { type: Type.STRING, enum: [...EQUIPMENT_BOXES] },
+          item: { type: Type.STRING, enum: [...APP_BOXES] },
           status: { type: Type.STRING, enum: ['standard', 'optional', 'no', 'unknown'] },
         },
         propertyOrdering: ['item', 'status'],
@@ -79,24 +84,26 @@ const responseSchema = {
     },
     premiumAudioBrand: { type: Type.STRING },
     smartphoneAppName: { type: Type.STRING },
+    transmissionSpeeds: { type: Type.STRING },
     notes: { type: Type.STRING },
   },
-  propertyOrdering: ['items', 'premiumAudioBrand', 'smartphoneAppName', 'notes'],
+  propertyOrdering: ['items', 'premiumAudioBrand', 'smartphoneAppName', 'transmissionSpeeds', 'notes'],
   required: ['items'],
 };
 
-interface Parsed { items?: { item: string; status: EquipmentStatus }[]; premiumAudioBrand?: string; smartphoneAppName?: string; notes?: string }
+interface Parsed { items?: { item: string; status: EquipmentStatus }[]; premiumAudioBrand?: string; smartphoneAppName?: string; transmissionSpeeds?: string; notes?: string }
 
 function finish(parsed: Parsed, sources: string[], verified: boolean, via: EquipmentLookupResult['via']): EquipmentLookupResult {
   const statuses: Record<string, EquipmentStatus> = {};
   for (const row of parsed.items ?? []) {
-    if (EQUIPMENT_BOXES.includes(row.item)) statuses[row.item] = row.status;
+    if (APP_BOX_SET.has(row.item)) statuses[row.item] = row.status;
   }
   const clean = (v?: string) => { const t = (v ?? '').trim(); return t && !/^(none|n\/a|no|unknown)$/i.test(t) ? t : undefined; };
   return {
     statuses,
     premiumAudioBrand: clean(parsed.premiumAudioBrand),
     smartphoneAppName: clean(parsed.smartphoneAppName),
+    transmissionSpeeds: clean(parsed.transmissionSpeeds)?.replace(/[^0-9A-Za-z]/g, '').slice(0, 4),
     sources,
     verified,
     via,
@@ -117,7 +124,7 @@ async function researchGrounded(input: { year: string; make: string; model: stri
 Use the manufacturer's site and reputable spec sites (Edmunds, KBB, Cars.com, Car and Driver).
 
 For EACH item below answer exactly one letter: S (standard on every ${input.trim ? 'unit of this trim' : 'base-trim unit'}), O (optional package or option on this trim), N (not offered on this trim), U (could not verify).
-Then two final lines: "Premium audio brand: <brand or none>" and "Smartphone app: <name or none>".
+Then three final lines: "Premium audio brand: <brand or none>", "Smartphone app: <name or none>", "Transmission speeds: <number or CVT>".
 
 ${JUDGING_NOTES}
 
@@ -142,7 +149,7 @@ Output format, one line per item, nothing else: "<item>: <S|O|N|U>". Do not skip
 async function structure(prose: string, timeoutMs: number): Promise<Parsed> {
   const res = await timed('tradeEquipment.structure (schema)', () => ai.models.generateContent({
     model: MODEL,
-    contents: [{ role: 'user', parts: [{ text: `Convert this research into the schema. S=standard, O=optional, N=no, U=unknown. Use the exact item names from the checklist; any item not mentioned is "unknown".\n\nCHECKLIST ITEMS:\n${checklist()}\n\nRESEARCH:\n${prose}` }] }],
+    contents: [{ role: 'user', parts: [{ text: `Convert this research into the schema. S=standard, O=optional, N=no, U=unknown. Use the exact item names from the checklist; any item not mentioned is "unknown". Copy the premium audio brand, smartphone app and transmission speeds lines into their fields.\n\nCHECKLIST ITEMS:\n${checklist()}\n\nRESEARCH:\n${prose}` }] }],
     config: { temperature: 0, thinkingConfig: NO_THINKING, responseMimeType: 'application/json', responseSchema, httpOptions: { timeout: timeoutMs } },
   }));
   try { return JSON.parse(res.text || '{}'); } catch { return {}; }
@@ -157,7 +164,7 @@ async function fastLookup(input: { year: string; make: string; model: string; tr
   const res = await timed('tradeEquipment.fast (no search)', () => ai.models.generateContent({
     model: MODEL,
     contents: [{ role: 'user', parts: [{ text:
-`From your knowledge of the ${vehicle} (US market)${input.trim ? '' : ' (trim unknown: use the base trim)'}, classify each checklist item as standard on this trim, optional on this trim, not offered, or unknown. When you are not sure whether something was standard or an option, answer "optional", never "standard". Also give the premium audio brand if any and the maker's smartphone app name if it is not KiaConnect, uConnect, or Bluelink.
+`From your knowledge of the ${vehicle} (US market)${input.trim ? '' : ' (trim unknown: use the base trim)'}, classify each checklist item as standard on this trim, optional on this trim, not offered, or unknown. When you are not sure whether something was standard or an option, answer "optional", never "standard". Also give the premium audio brand if any, the maker's smartphone app name if it is not KiaConnect, uConnect, or Bluelink, and the number of speeds of the standard transmission.
 
 ${JUDGING_NOTES}
 

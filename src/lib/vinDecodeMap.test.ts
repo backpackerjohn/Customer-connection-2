@@ -62,3 +62,11 @@ describe('vinFactsFromRecord', () => {
     expect(f.boxes).toEqual(expect.arrayContaining(['Convertible', 'RWD']));
   });
 });
+
+describe('engine text without a layout', () => {
+  it('reads "2.0L 4-cyl" when NHTSA gives no engine configuration', () => {
+    const f = vinFactsFromRecord({ DisplacementL: '2.0', EngineCylinders: '4' });
+    expect(f.engine).toBe('2.0L 4-cyl');
+    expect(f.cylinders).toBe('4');
+  });
+});

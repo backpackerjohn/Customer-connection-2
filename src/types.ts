@@ -27,6 +27,42 @@ export interface TradeCheckIn {
   lookedUpAt?: string;
 }
 
+/**
+ * Bank details copied onto the customer for the payoff sheet. A snapshot, not
+ * a live link: an old deal keeps printing what was true when it closed. One
+ * map so it costs the rules budget one field.
+ */
+export interface PayoffLender {
+  /** lenders/{id} this came from, when it came from the library. */
+  lenderId?: string;
+  phone?: string;
+  /** Overnight / express payoff address (street address, not a PO Box when one exists). */
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+}
+
+/** A bank in the shared lender library (top-level `lenders` collection, readable by every signed-in dealer). */
+export interface Lender {
+  id?: string;
+  name: string;
+  /** Normalized name for matching (see lib/lenders.ts). */
+  nameKey: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  /** Where the details came from: source domains, "dealer", or "model knowledge". */
+  sources?: string;
+  /** True once a dealer confirmed the details. */
+  verified: boolean;
+  createdBy: string;
+  createdAt?: FirestoreTimestamp;
+  updatedAt?: FirestoreTimestamp;
+}
+
 export interface Customer {
   id?: string;
   firstName: string;
@@ -79,6 +115,12 @@ export interface Customer {
   payoffAmount?: string;
   monthlyPayment?: string;
   monthsRemaining?: string;
+  /** Payoff sheet, bank half: snapshot of the lender's payoff contact details. Dealer/library-only, never AI-extracted. */
+  payoffLender?: PayoffLender;
+  /** Payoff sheet, deal half: typed every deal. Dealer-only, never AI-extracted. */
+  payoffAccountNumber?: string;
+  payoffPerDiem?: string;
+  payoff20Day?: string;
   goalsMonthlyPayment?: string;
   goalsMoneyDown?: string;
   goalsCreditScore?: string;

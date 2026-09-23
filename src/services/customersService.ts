@@ -58,7 +58,7 @@ export async function updateCustomer(
       const oldVal = lastSavedData[key];
       
       let changed = false;
-      if (key === 'manualReminders' || key === 'tradeCheckIn') {
+      if (key === 'manualReminders' || key === 'tradeCheckIn' || key === 'payoffLender') {
         if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
           changed = true;
         }

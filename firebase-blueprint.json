@@ -5,70 +5,337 @@
       "description": "A customer lead or active client profile.",
       "type": "object",
       "properties": {
-        "firstName": { "type": "string", "description": "Legal first name" },
-        "middleInitial": { "type": "string", "description": "Middle initial" },
-        "lastName": { "type": "string", "description": "Legal last name" },
-        "dob": { "type": "string", "format": "date", "description": "Date of birth" },
-        "phone": { "type": "string", "description": "Contact phone number" },
-        "email": { "type": "string", "format": "email", "description": "Email address" },
-        "address": { "type": "string", "description": "Street address" },
-        "city": { "type": "string", "description": "City" },
-        "state": { "type": "string", "description": "State" },
-        "zip": { "type": "string", "description": "Zip code" },
-        "dlNumber": { "type": "string", "description": "Driver's license number" },
-        "dlState": { "type": "string", "description": "Driver's license state" },
-        "dlExpiration": { "type": "string", "format": "date", "description": "DL expiration date" },
-        "vehicleStock": { "type": "string", "description": "New vehicle stock number" },
-        "vehicleYear": { "type": "string", "description": "New vehicle year" },
-        "vehicleMake": { "type": "string", "description": "New vehicle make" },
-        "vehicleModel": { "type": "string", "description": "New vehicle model" },
-        "vehicleVin": { "type": "string", "description": "New vehicle VIN" },
-        "vehicleMiles": { "type": "string", "description": "New vehicle mileage" },
-        "insuranceCompany": { "type": "string", "description": "Insurance provider" },
-        "agentName": { "type": "string", "description": "Insurance agent name" },
-        "hasTradeIn": { "type": "boolean", "description": "Whether the customer is trading in a vehicle" },
-        "tradeYear": { "type": "string", "description": "Trade-in year" },
-        "tradeMake": { "type": "string", "description": "Trade-in make" },
-        "tradeModel": { "type": "string", "description": "Trade-in model" },
-        "tradeTrim": { "type": "string", "description": "Trade-in trim level" },
-        "tradeMileage": { "type": "string", "description": "Trade-in mileage" },
-        "tradeVin": { "type": "string", "description": "Trade-in VIN" },
-        "tradeValueLow": { "type": "string", "description": "Legacy trade-in value low" },
-        "tradeValueHigh": { "type": "string", "description": "Legacy trade-in value high" },
-        "tradeValueExcellentLow": { "type": "string", "description": "Excellent condition valuation low" },
-        "tradeValueExcellentHigh": { "type": "string", "description": "Excellent condition valuation high" },
-        "tradeValueVeryGoodLow": { "type": "string", "description": "Very good condition valuation low" },
-        "tradeValueVeryGoodHigh": { "type": "string", "description": "Very good condition valuation high" },
-        "tradeValueGoodLow": { "type": "string", "description": "Good condition valuation low" },
-        "tradeValueGoodHigh": { "type": "string", "description": "Good condition valuation high" },
-        "tradeValueFairLow": { "type": "string", "description": "Fair condition valuation low" },
-        "tradeValueFairHigh": { "type": "string", "description": "Fair condition valuation high" },
-        "stillOwe": { "type": "boolean", "description": "Whether money is still owed on the trade-in" },
-        "lienholder": { "type": "string", "description": "Trade-in lienholder" },
-        "payoffAmount": { "type": "string", "description": "Payoff amount for trade-in" },
-        "monthlyPayment": { "type": "string", "description": "Current monthly payment for trade-in" },
-        "monthsRemaining": { "type": "string", "description": "Months remaining on trade-in loan" },
-        "goalsMonthlyPayment": { "type": "string", "description": "Desired monthly payment range" },
-        "goalsMoneyDown": { "type": "string", "description": "Down payment goal" },
-        "goalsCreditScore": { "type": "string", "description": "Estimated credit score" },
-        "status": { "type": "string", "enum": ["active", "inactive", "lead"], "description": "Current status of the profile" },
-        "createdBy": { "type": "string", "description": "UID of the user who created this customer" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when customer was created" },
-        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp when customer was last updated" }
+        "firstName": {
+          "type": "string",
+          "description": "Legal first name"
+        },
+        "middleInitial": {
+          "type": "string",
+          "description": "Middle initial"
+        },
+        "lastName": {
+          "type": "string",
+          "description": "Legal last name"
+        },
+        "dob": {
+          "type": "string",
+          "format": "date",
+          "description": "Date of birth"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Email address"
+        },
+        "address": {
+          "type": "string",
+          "description": "Street address"
+        },
+        "city": {
+          "type": "string",
+          "description": "City"
+        },
+        "state": {
+          "type": "string",
+          "description": "State"
+        },
+        "zip": {
+          "type": "string",
+          "description": "Zip code"
+        },
+        "dlNumber": {
+          "type": "string",
+          "description": "Driver's license number"
+        },
+        "dlState": {
+          "type": "string",
+          "description": "Driver's license state"
+        },
+        "dlExpiration": {
+          "type": "string",
+          "format": "date",
+          "description": "DL expiration date"
+        },
+        "vehicleStock": {
+          "type": "string",
+          "description": "New vehicle stock number"
+        },
+        "vehicleYear": {
+          "type": "string",
+          "description": "New vehicle year"
+        },
+        "vehicleMake": {
+          "type": "string",
+          "description": "New vehicle make"
+        },
+        "vehicleModel": {
+          "type": "string",
+          "description": "New vehicle model"
+        },
+        "vehicleVin": {
+          "type": "string",
+          "description": "New vehicle VIN"
+        },
+        "vehicleMiles": {
+          "type": "string",
+          "description": "New vehicle mileage"
+        },
+        "insuranceCompany": {
+          "type": "string",
+          "description": "Insurance provider"
+        },
+        "agentName": {
+          "type": "string",
+          "description": "Insurance agent name"
+        },
+        "hasTradeIn": {
+          "type": "boolean",
+          "description": "Whether the customer is trading in a vehicle"
+        },
+        "tradeYear": {
+          "type": "string",
+          "description": "Trade-in year"
+        },
+        "tradeMake": {
+          "type": "string",
+          "description": "Trade-in make"
+        },
+        "tradeModel": {
+          "type": "string",
+          "description": "Trade-in model"
+        },
+        "tradeTrim": {
+          "type": "string",
+          "description": "Trade-in trim level"
+        },
+        "tradeMileage": {
+          "type": "string",
+          "description": "Trade-in mileage"
+        },
+        "tradeVin": {
+          "type": "string",
+          "description": "Trade-in VIN"
+        },
+        "tradeValueLow": {
+          "type": "string",
+          "description": "Legacy trade-in value low"
+        },
+        "tradeValueHigh": {
+          "type": "string",
+          "description": "Legacy trade-in value high"
+        },
+        "tradeValueExcellentLow": {
+          "type": "string",
+          "description": "Excellent condition valuation low"
+        },
+        "tradeValueExcellentHigh": {
+          "type": "string",
+          "description": "Excellent condition valuation high"
+        },
+        "tradeValueVeryGoodLow": {
+          "type": "string",
+          "description": "Very good condition valuation low"
+        },
+        "tradeValueVeryGoodHigh": {
+          "type": "string",
+          "description": "Very good condition valuation high"
+        },
+        "tradeValueGoodLow": {
+          "type": "string",
+          "description": "Good condition valuation low"
+        },
+        "tradeValueGoodHigh": {
+          "type": "string",
+          "description": "Good condition valuation high"
+        },
+        "tradeValueFairLow": {
+          "type": "string",
+          "description": "Fair condition valuation low"
+        },
+        "tradeValueFairHigh": {
+          "type": "string",
+          "description": "Fair condition valuation high"
+        },
+        "stillOwe": {
+          "type": "boolean",
+          "description": "Whether money is still owed on the trade-in"
+        },
+        "lienholder": {
+          "type": "string",
+          "description": "Trade-in lienholder"
+        },
+        "payoffAmount": {
+          "type": "string",
+          "description": "Payoff amount for trade-in"
+        },
+        "monthlyPayment": {
+          "type": "string",
+          "description": "Current monthly payment for trade-in"
+        },
+        "monthsRemaining": {
+          "type": "string",
+          "description": "Months remaining on trade-in loan"
+        },
+        "goalsMonthlyPayment": {
+          "type": "string",
+          "description": "Desired monthly payment range"
+        },
+        "goalsMoneyDown": {
+          "type": "string",
+          "description": "Down payment goal"
+        },
+        "goalsCreditScore": {
+          "type": "string",
+          "description": "Estimated credit score"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "inactive",
+            "lead"
+          ],
+          "description": "Current status of the profile"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the user who created this customer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when customer was created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when customer was last updated"
+        },
+        "payoffLender": {
+          "type": "object",
+          "description": "Payoff sheet bank half: snapshot of the lender's payoff contact details (lenderId, phone, address, city, state, zip). Copied from the lender library, not linked live."
+        },
+        "payoffAccountNumber": {
+          "type": "string",
+          "description": "Loan account number for the payoff sheet; typed every deal"
+        },
+        "payoffPerDiem": {
+          "type": "string",
+          "description": "Per diem interest for the payoff sheet; typed every deal"
+        },
+        "payoff20Day": {
+          "type": "string",
+          "description": "20-day payoff amount for the payoff sheet; typed every deal"
+        }
       },
-      "required": ["firstName", "lastName", "status", "hasTradeIn", "stillOwe", "createdBy", "createdAt", "updatedAt"]
+      "required": [
+        "firstName",
+        "lastName",
+        "status",
+        "hasTradeIn",
+        "stillOwe",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ]
     },
     "Note": {
       "title": "Note",
       "description": "A timestamped note or discovery about a customer.",
       "type": "object",
       "properties": {
-        "content": { "type": "string", "description": "The text of the note" },
-        "type": { "type": "string", "enum": ["manual", "ai", "transcript"], "description": "The source of the note" },
-        "authorId": { "type": "string", "description": "UID of the user who created the note" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+        "content": {
+          "type": "string",
+          "description": "The text of the note"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "ai",
+            "transcript"
+          ],
+          "description": "The source of the note"
+        },
+        "authorId": {
+          "type": "string",
+          "description": "UID of the user who created the note"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp"
+        }
       },
-      "required": ["content", "type", "authorId", "createdAt"]
+      "required": [
+        "content",
+        "type",
+        "authorId",
+        "createdAt"
+      ]
+    },
+    "Lender": {
+      "title": "Lender",
+      "description": "A bank in the shared payoff lender library. Readable and correctable by every signed-in dealer; the details are copied onto a customer as payoffLender when a deal is written.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Official lender name as it appears on lien paperwork"
+        },
+        "nameKey": {
+          "type": "string",
+          "description": "Normalized name used for matching (see src/lib/lenders.ts)"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Dealer / lienholder payoff phone line"
+        },
+        "address": {
+          "type": "string",
+          "description": "Overnight (express) payoff street address"
+        },
+        "city": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "zip": {
+          "type": "string"
+        },
+        "sources": {
+          "type": "string",
+          "description": "Where the details came from: source domains, 'dealer', or 'model knowledge, not web-verified'"
+        },
+        "verified": {
+          "type": "boolean",
+          "description": "True once a dealer confirmed the details"
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID of the dealer who added it; immutable"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "name",
+        "nameKey",
+        "verified",
+        "createdBy",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -79,6 +346,10 @@
     "/customers/{customerId}/notes/{noteId}": {
       "schema": "Note",
       "description": "Timeline of notes for a specific customer"
+    },
+    "/lenders/{lenderId}": {
+      "schema": "Lender",
+      "description": "Shared payoff lender library (all signed-in dealers)."
     }
   }
 }

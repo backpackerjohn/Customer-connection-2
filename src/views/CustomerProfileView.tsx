@@ -21,7 +21,7 @@ import {
   ClipboardList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Customer, Note } from '../types';
+import { Customer, Note, Lender } from '../types';
 import { CaptureIntent } from '../lib/captureIntent';
 import { SaveStatusIndicator } from '../components/SaveStatusIndicator';
 import { MenuButton } from '../components/MenuButton';
@@ -80,6 +80,9 @@ interface Props {
   onReschedule: (customerId: string, date: string, reason: string) => void;
   /** Open the document tray, optionally straight into one slot's picker. */
   onOpenDocumentTray: (slot?: CaptureIntent) => void;
+  /** Shared payoff lender library + the signed-in dealer (for new library records). */
+  lenders: Lender[];
+  userId: string;
 }
 
 export function CustomerProfileView({
@@ -110,7 +113,9 @@ export function CustomerProfileView({
   tradeLookupError,
   onReschedule,
   onTradeEstimate,
-  onOpenDocumentTray
+  onOpenDocumentTray,
+  lenders,
+  userId
 }: Props) {
   return (
     <div className="max-w-2xl mx-auto">
@@ -194,6 +199,8 @@ export function CustomerProfileView({
           isEstimatingTradeValue={isEstimatingTradeValue}
           valuationError={valuationError}
           onCapture={() => onOpenDocumentTray('trade')}
+          lenders={lenders}
+          userId={userId}
         />
         {currentCustomer.hasTradeIn && (
           <TradeCheckInSection

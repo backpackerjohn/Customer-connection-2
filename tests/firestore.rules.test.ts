@@ -527,6 +527,7 @@ describe('Firestore rules — Customer collection', () => {
       else if (k === 'createdAt' || k === 'updatedAt') full[k] = serverTimestamp();
       else if (k === 'status') full[k] = 'lead';
       else if (k === 'manualReminders') full[k] = [{ date: '2026-10-01', reason: 'call' }];
+      else if (k === 'payoffLender') full[k] = { lenderId: 'abc', phone: '888-925-2559', address: '4000 Monroe Rd', city: 'Charlotte', state: 'NC', zip: '28205' };
       else if (k === 'tradeCheckIn') full[k] = {
         equipment: Array.from({ length: 60 }, (_, i) => `Box ${i}`), unsure: ['A', 'B'],
         engine: '3.5L V6', cylinders: '6', transmissionSpeeds: '10', extColor: 'White', intColor: 'Black',
@@ -541,5 +542,47 @@ describe('Firestore rules — Customer collection', () => {
       tradeCheckIn: { ...(full.tradeCheckIn as object), extColor: 'Red' }, updatedAt: serverTimestamp(),
     }));
   });
+  // --- Payoff sheet fields on the customer ---
+  it('43. payoffLender must be a small map; per-deal payoff strings are size-capped', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(setDoc(doc(aliceDb, 'customers/p1'), validCustomer({
+      payoffLender: { lenderId: 'x', phone: '888', address: '1 Main St', city: 'Akron', state: 'OH', zip: '44301' },
+      payoffAccountNumber: 'ACCT-1', payoffPerDiem: '3.10', payoff20Day: '18250.50',
+    })));
+    await assertFails(setDoc(doc(aliceDb, 'customers/p2'), validCustomer({ payoffLender: 'Ally' })));
+    await assertFails(setDoc(doc(aliceDb, 'customers/p3'), validCustomer({ payoffAccountNumber: 'x'.repeat(51) })));
+    await assertFails(setDoc(doc(aliceDb, 'customers/p4'), validCustomer({ payoff20Day: 'x'.repeat(21) })));
+  });
+
+  // --- Shared lender library ---
+  const validLender = (overrides = {}) => ({
+    name: 'Ally Financial', nameKey: 'ally financial', phone: '888-925-2559',
+    address: '4000 Monroe Rd', city: 'Charlotte', state: 'NC', zip: '28205',
+    sources: 'ally.com', verified: true, createdBy: 'user_alice',
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...overrides,
+  });
+
+  it('44. any signed-in dealer can add a lender; anonymous cannot; createdBy cannot be spoofed', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(setDoc(doc(aliceDb, 'lenders/l1'), validLender()));
+    await assertFails(setDoc(doc(anonContext().firestore(), 'lenders/l2'), validLender()));
+    await assertFails(setDoc(doc(aliceDb, 'lenders/l3'), validLender({ createdBy: 'user_bob' })));
+    await assertFails(setDoc(doc(aliceDb, 'lenders/l4'), validLender({ name: '' })));
+    await assertFails(setDoc(doc(aliceDb, 'lenders/l5'), validLender({ address: 'x'.repeat(201) })));
+    await assertFails(setDoc(doc(aliceDb, 'lenders/l6'), validLender({ routing: '123' })));
+  });
+
+  it('45. the library is shared: another dealer reads and corrects a lender, but cannot change createdBy', async () => {
+    await testEnv.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(), 'lenders/l1'), validLender());
+    });
+    const bobDb = bobContext().firestore();
+    await assertSucceeds(getDocs(query(collection(bobDb, 'lenders'))));
+    await assertSucceeds(updateDoc(doc(bobDb, 'lenders/l1'), { phone: '800-000-0000', verified: true, updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(bobDb, 'lenders/l1'), { createdBy: 'user_bob' }));
+    await assertFails(updateDoc(doc(bobDb, 'lenders/l1'), { verified: 'yes' }));
+    await assertFails(getDocs(query(collection(anonContext().firestore(), 'lenders'))));
+  });
 });
+
 

@@ -18,7 +18,7 @@ import { CaptureIntent } from './lib/captureIntent';
 import { NavItem } from './components/NavItem';
 import { NavIconButton } from './components/NavIconButton';
 
-import { Customer, Note, Todo, TradeCheckIn, emptyCustomer } from './types';
+import { Customer, Lender, Note, Todo, TradeCheckIn, emptyCustomer } from './types';
 import { decodeVinRecord } from './services/vinService';
 import { vinFactsFromRecord } from './lib/vinDecodeMap';
 import { lookupTradeEquipment, EquipmentLookupError, UNVERIFIED_SOURCES } from './services/tradeEquipmentService';
@@ -26,6 +26,7 @@ import { factGroupAnswered, normalizeBoxes, setBox } from './lib/tradeCheckInShe
 import { createCustomer, updateCustomer, subscribeToCustomers } from './services/customersService';
 import { createNote, subscribeToNotes, subscribeToAllNotes } from './services/notesService';
 import { createContact } from './services/contactsService';
+import { subscribeToLenders } from './services/lendersService';
 import { createTodo, subscribeToTodos, setTodoDone, updateTodoText, deleteTodo } from './services/todosService';
 import { ReminderKind, recordContact, computeNextCadenceDue, rollNextCadence } from './lib/reminders/engine';
 import { REMINDER_CONFIG } from './lib/reminders/config';
@@ -59,6 +60,7 @@ export default function App() {
   const [view, setView] = useState<'dashboard' | 'profile' | 'settings' | 'bulk-intake' | 'today' | 'customers' | 'todos'>('customers');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [lenders, setLenders] = useState<Lender[]>([]);
   const [notesByCustomer, setNotesByCustomer] = useState<Record<string, string[]>>({});
   const [currentCustomer, setCurrentCustomer] = useState<Customer>(emptyCustomer);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -235,10 +237,16 @@ export default function App() {
       (error) => handleFirestoreError(error, OperationType.LIST, 'todos')
     );
 
+    const unsubLenders = subscribeToLenders(
+      setLenders,
+      (error) => handleFirestoreError(error, OperationType.LIST, 'lenders')
+    );
+
     return () => {
       unsubCustomers();
       unsubNotes();
       unsubTodos();
+      unsubLenders();
     };
   }, [user]);
 
@@ -1024,6 +1032,8 @@ export default function App() {
               onTradeEstimate={handleTradeEstimate}
               onReschedule={handleReschedule}
               onOpenDocumentTray={handleOpenDocumentTray}
+              lenders={lenders}
+              userId={user?.uid ?? ''}
             />
           </motion.div>
         )}

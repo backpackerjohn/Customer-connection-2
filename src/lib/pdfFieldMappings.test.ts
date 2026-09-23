@@ -10,6 +10,7 @@ import {
   BUYERS_GUIDE_FIELDS,
   TRADE_CHECK_IN_FIELDS,
 } from './pdfFieldMappings';
+import { emptyCustomer } from '../types';
 import { Customer } from '../types';
 
 const sample: Customer = {
@@ -116,8 +117,19 @@ describe('PRIVACY_POLICY_FIELDS', () => {
 });
 
 describe('PAYOFF_FIELDS', () => {
-  it('has 8 mappings (lender/bank info skipped — filled at closing)', () => {
-    expect(PAYOFF_FIELDS).toHaveLength(8);
+  it('has 17 mappings: deal identity, bank snapshot, and per-deal payoff figures', () => {
+    expect(PAYOFF_FIELDS).toHaveLength(17);
+  });
+  it('bank half comes from customer.payoffLender and the 20-day payoff fills both template slots', () => {
+    const c = { ...emptyCustomer, lienholder: 'Ally Financial', payoffLender: { phone: '888-925-2559', address: '4000 Monroe Rd', city: 'Charlotte', state: 'nc', zip: '28205' }, payoff20Day: '18250.5', payoffPerDiem: '3.1', payoffAccountNumber: 'A-1' };
+    const get = (n: string) => PAYOFF_FIELDS.find(x => x.pdfFieldName === n)!.getValue(c);
+    expect(get('OVERNIGHT Lender_Address')).toBe('4000 Monroe Rd');
+    expect(get('Bank State')).toBe('NC');
+    expect(get('20DAY_PAYOFF')).toBe('$18,250.5');
+    expect(get('20DAY PAYOFF')).toBe('$18,250.5');
+    expect(get('Lender_PerDiemAmount')).toBe('$3.1');
+    expect(get('Lender_AccountNumber')).toBe('A-1');
+    expect(PAYOFF_FIELDS.find(x => x.pdfFieldName === 'Bank City')!.getValue(emptyCustomer)).toBe('');
   });
   it('Lender_Name comes from customer.lienholder', () => {
     const m = PAYOFF_FIELDS.find(x => x.pdfFieldName === 'Lender_Name')!;

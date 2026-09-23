@@ -1,12 +1,13 @@
 import React from 'react';
 import { Users, Camera } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Customer } from '../../types';
+import { Customer, Lender } from '../../types';
 import { InputField } from '../../components/InputField';
 import { Toggle } from '../../components/Toggle';
 import { VinLookupButtons } from '../../components/VinLookupButtons';
 
 import { TradeEquityPanel } from '../../components/TradeEquityPanel';
+import { PayoffLenderPanel } from '../../components/PayoffLenderPanel';
 
 interface Props {
   customer: Customer;
@@ -25,9 +26,12 @@ interface Props {
   isEstimatingTradeValue: boolean;
   valuationError: string | null;
   onCapture?: () => void;
+  /** Shared lender library for the payoff sheet's bank half. */
+  lenders: Lender[];
+  userId: string;
 }
 
-export function TradeInSection({ customer, onChange, onTradeEstimate, isEstimatingTradeValue, valuationError, onCapture }: Props) {
+export function TradeInSection({ customer, onChange, onTradeEstimate, isEstimatingTradeValue, valuationError, onCapture, lenders, userId }: Props) {
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-2 px-2">
@@ -129,28 +133,46 @@ export function TradeInSection({ customer, onChange, onTradeEstimate, isEstimati
                   animate={{ opacity: 1, height: 'auto' }}
                   className="space-y-6 overflow-hidden"
                 >
-                  <InputField 
-                    label="Lienholder" 
-                    value={customer.lienholder} 
-                    onChange={v => onChange({ lienholder: v })} 
-                  />
-                  <div className="grid grid-cols-2 gap-4">
-                    <InputField 
-                      label="Payoff Amount" 
-                      value={customer.payoffAmount} 
-                      onChange={v => onChange({ payoffAmount: v })} 
-                    />
-                    <InputField 
-                      label="Monthly Payment" 
-                      value={customer.monthlyPayment} 
-                      onChange={v => onChange({ monthlyPayment: v })} 
-                    />
+                  <PayoffLenderPanel customer={customer} onChange={onChange} lenders={lenders} userId={userId} />
+                  <div className="pt-4 border-t border-gray-100 space-y-4">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">This deal</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <InputField 
+                        label="Payoff Amount" 
+                        value={customer.payoffAmount} 
+                        onChange={v => onChange({ payoffAmount: v })} 
+                      />
+                      <InputField 
+                        label="20-Day Payoff" 
+                        value={customer.payoff20Day} 
+                        onChange={v => onChange({ payoff20Day: v })} 
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <InputField 
+                        label="Per Diem" 
+                        value={customer.payoffPerDiem} 
+                        onChange={v => onChange({ payoffPerDiem: v })} 
+                      />
+                      <InputField 
+                        label="Account #" 
+                        value={customer.payoffAccountNumber} 
+                        onChange={v => onChange({ payoffAccountNumber: v })} 
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <InputField 
+                        label="Monthly Payment" 
+                        value={customer.monthlyPayment} 
+                        onChange={v => onChange({ monthlyPayment: v })} 
+                      />
+                      <InputField 
+                        label="Months Remaining" 
+                        value={customer.monthsRemaining} 
+                        onChange={v => onChange({ monthsRemaining: v })} 
+                      />
+                    </div>
                   </div>
-                  <InputField 
-                    label="Months Remaining" 
-                    value={customer.monthsRemaining} 
-                    onChange={v => onChange({ monthsRemaining: v })} 
-                  />
                 </motion.div>
               )}
             </div>

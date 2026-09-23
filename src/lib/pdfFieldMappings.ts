@@ -118,10 +118,10 @@ export const PRIVACY_POLICY_FIELDS: PdfFieldMapping[] = [
 ];
 
 // Payoff — included only when hasTradeIn && stillOwe.
-// Skipped (no Customer field; dealer fills at closing with lender-provided data):
-//   "Lender_PhoneNumber", "OVERNIGHT Lender_Address", "Lender_AccountNumber",
-//   "Lender_PerDiemAmount", "20DAY_PAYOFF", "20DAY PAYOFF",
-//   "Bank City", "Bank State", "Bank Zip".
+// Bank half comes from customer.payoffLender (snapshot of the shared lender
+// library, see lib/lenders.ts); deal half (account #, per diem, 20-day payoff)
+// is typed on the Trade-in card every deal. The template has the 20-day payoff
+// twice ("20DAY_PAYOFF" and "20DAY PAYOFF"); both get the same value.
 export const PAYOFF_FIELDS: PdfFieldMapping[] = [
   { pdfFieldName: 'FirstName LastName', getValue: c => fullName(c) },
   { pdfFieldName: 'Vehicle_StockNumber', getValue: c => c.vehicleStock ?? '' },
@@ -131,6 +131,15 @@ export const PAYOFF_FIELDS: PdfFieldMapping[] = [
   { pdfFieldName: 'Trade-In Vehicle Model', getValue: c => c.tradeModel ?? '' },
   { pdfFieldName: 'Lender_Name', getValue: c => c.lienholder ?? '' },
   { pdfFieldName: 'TODAYS PAYOFF', getValue: c => moneyOrEmpty(c.payoffAmount) },
+  { pdfFieldName: 'Lender_PhoneNumber', getValue: c => c.payoffLender?.phone ?? '' },
+  { pdfFieldName: 'OVERNIGHT Lender_Address', getValue: c => c.payoffLender?.address ?? '' },
+  { pdfFieldName: 'Bank City', getValue: c => c.payoffLender?.city ?? '' },
+  { pdfFieldName: 'Bank State', getValue: c => (c.payoffLender?.state ?? '').toUpperCase() },
+  { pdfFieldName: 'Bank Zip', getValue: c => c.payoffLender?.zip ?? '' },
+  { pdfFieldName: 'Lender_AccountNumber', getValue: c => c.payoffAccountNumber ?? '' },
+  { pdfFieldName: 'Lender_PerDiemAmount', getValue: c => moneyOrEmpty(c.payoffPerDiem) },
+  { pdfFieldName: '20DAY_PAYOFF', getValue: c => moneyOrEmpty(c.payoff20Day) },
+  { pdfFieldName: '20DAY PAYOFF', getValue: c => moneyOrEmpty(c.payoff20Day) },
 ];
 
 // 3-Liner — included only when payingCash.

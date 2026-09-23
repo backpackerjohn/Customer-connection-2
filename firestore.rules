@@ -131,7 +131,28 @@ service cloud.firestore {
         && data.get('tradeCheckIn', {}).get('equipment', []) is list
         && data.get('tradeCheckIn', {}).get('equipment', []).size() <= 150
         && data.get('tradeCheckIn', {}).get('unsure', []) is list
-        && data.get('tradeCheckIn', {}).get('unsure', []).size() <= 150;
+        && data.get('tradeCheckIn', {}).get('unsure', []).size() <= 150
+
+        // Payoff sheet: bank snapshot (one map) + per-deal figures
+        && data.get('payoffLender', {}) is map
+        && data.get('payoffLender', {}).size() <= 8
+        && data.get('payoffAccountNumber', '').size() <= 50
+        && data.get('payoffPerDiem', '').size() <= 20
+        && data.get('payoff20Day', '').size() <= 20;
+    }
+
+    // --- Lender library (shared by every signed-in dealer) ---
+    function isValidLender(data) {
+      return data.get('name', '') is string
+        && data.get('name', '').size() >= 1 && data.get('name', '').size() <= 120
+        && data.get('nameKey', '').size() <= 120
+        && data.get('phone', '').size() <= 40
+        && data.get('address', '').size() <= 200
+        && data.get('city', '').size() <= 100
+        && data.get('state', '').size() <= 50
+        && data.get('zip', '').size() <= 20
+        && data.get('sources', '').size() <= 500
+        && data.get('verified', false) is bool;
     }
 
     function isValidNote(data) {
@@ -185,7 +206,8 @@ service cloud.firestore {
           'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
           'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
           'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working',
-          'tradeIsBLine', 'tradeStockNumber', 'tradeCheckIn'
+          'tradeIsBLine', 'tradeStockNumber', 'tradeCheckIn',
+            'payoffLender', 'payoffAccountNumber', 'payoffPerDiem', 'payoff20Day'
         ])
         && incoming().createdAt == request.time
         && (incoming().updatedAt == request.time || !('updatedAt' in incoming()))
@@ -216,7 +238,8 @@ service cloud.firestore {
             'tradeValueAt', 'customerDesiredTradeValue', 'status', 'updatedAt',
             'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
             'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working',
-            'tradeIsBLine', 'tradeStockNumber', 'tradeCheckIn'
+            'tradeIsBLine', 'tradeStockNumber', 'tradeCheckIn',
+            'payoffLender', 'payoffAccountNumber', 'payoffPerDiem', 'payoff20Day'
           ])
         )
         && (incoming().get('updatedAt', request.time) == request.time);
@@ -244,6 +267,24 @@ service cloud.firestore {
           && incoming().at == request.time;
         allow update, delete: if isValidId(contactId) && isSignedIn() && existing().get('authorId', null) == request.auth.uid;
       }
+    }
+
+    // Shared lender library: any signed-in dealer may read, add, correct or
+    // remove a bank. createdBy is stamped on create and never changes.
+    match /lenders/{lenderId} {
+      allow get: if isSignedIn() && isValidId(lenderId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn()
+        && isValidId(lenderId)
+        && isValidLender(incoming())
+        && incoming().get('createdBy', null) == request.auth.uid
+        && incoming().keys().hasOnly(['name', 'nameKey', 'phone', 'address', 'city', 'state', 'zip', 'sources', 'verified', 'createdBy', 'createdAt', 'updatedAt'])
+        && incoming().get('createdAt', request.time) == request.time;
+      allow update: if isSignedIn()
+        && isValidId(lenderId)
+        && isValidLender(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'nameKey', 'phone', 'address', 'city', 'state', 'zip', 'sources', 'verified', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(lenderId);
     }
 
     match /todos/{todoId} {

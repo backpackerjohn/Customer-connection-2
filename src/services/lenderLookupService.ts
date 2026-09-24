@@ -110,7 +110,7 @@ function finish(parsed: Parsed, bank: string, sources: string[], verified: boole
  * first (retried once on 503/429/timeout), then model knowledge marked
  * unverified. The dealer confirms the result before it is saved anywhere.
  */
-export async function lookupLender(bank: string): Promise<LenderLookupResult> {
+export async function lookupLenderDirect(bank: string): Promise<LenderLookupResult> {
   if (!process.env.GEMINI_API_KEY) throw new LenderLookupError('GEMINI_API_KEY is not set');
   const name = bank.trim();
   if (name.length < 2) throw new LenderLookupError('type the lender name first');
@@ -142,4 +142,40 @@ export async function lookupLender(bank: string): Promise<LenderLookupResult> {
     note('fast', err);
   }
   throw new LenderLookupError(attempts.join('; ') + '.');
+}
+
+/**
+ * Web lookup of a lender's payoff phone and overnight address. Grounded search
+ * first (retried once on 503/429/timeout), then model knowledge marked
+ * unverified. The dealer confirms the result before it is saved anywhere.
+ *
+ * In the browser, this routes through the /api/lookup-lender server proxy
+ * so that Google API calls execute server-side in Node with full search grounding.
+ */
+export async function lookupLender(bank: string): Promise<LenderLookupResult> {
+  const name = bank.trim();
+  if (name.length < 2) throw new LenderLookupError('type the lender name first');
+
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch('/api/lookup-lender', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bank: name }),
+      });
+      if (res.ok) {
+        return (await res.json()) as LenderLookupResult;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (data && typeof data.error === 'string') {
+        throw new LenderLookupError(data.error);
+      }
+      throw new Error(`HTTP ${res.status}`);
+    } catch (err: unknown) {
+      if (err instanceof LenderLookupError) throw err;
+      console.warn('Server lookup failed, falling back to direct:', err);
+    }
+  }
+
+  return lookupLenderDirect(name);
 }

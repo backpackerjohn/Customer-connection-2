@@ -186,7 +186,7 @@ export function TimelineNotesSection({ customer, notes, newNote, onNewNoteChange
             <button 
               onClick={onAddNote}
               disabled={!newNote.trim()}
-              className="bg-gray-900 text-white p-2 rounded-xl disabled:opacity-30 disabled:grayscale transition-all active:scale-95 cursor-pointer"
+              className="bg-orange-500 hover:bg-orange-600 text-white p-2 rounded-xl disabled:opacity-30 disabled:grayscale transition-all active:scale-95 cursor-pointer"
             >
               <Plus size={20} />
             </button>

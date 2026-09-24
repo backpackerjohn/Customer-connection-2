@@ -111,8 +111,9 @@ describe('DEAL_CHECKLIST_FIELDS', () => {
 });
 
 describe('PRIVACY_POLICY_FIELDS', () => {
-  it('is intentionally empty (template not supplied / static legal text)', () => {
-    expect(PRIVACY_POLICY_FIELDS).toEqual([]);
+  it('maps Deal_Date and Deal_Date_2 to dealDate', () => {
+    expect(PRIVACY_POLICY_FIELDS).toHaveLength(2);
+    expect(PRIVACY_POLICY_FIELDS.map(f => f.pdfFieldName)).toEqual(['Deal_Date', 'Deal_Date_2']);
   });
 });
 

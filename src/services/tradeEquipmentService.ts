@@ -184,7 +184,7 @@ ${checklist()}` }] }],
  * Returns null only when the input is incomplete; throws EquipmentLookupError
  * listing what every attempt said, so the dealer (and the log) can tell why.
  */
-export async function lookupTradeEquipment(
+export async function lookupTradeEquipmentDirect(
   input: { year: string; make: string; model: string; trim?: string },
   options: LookupOptions = {}
 ): Promise<EquipmentLookupResult | null> {
@@ -231,6 +231,41 @@ export async function lookupTradeEquipment(
 
   console.error('Every trade equipment lookup path failed:', attempts);
   throw new EquipmentLookupError(attempts.join('; ') + '.');
+}
+
+/**
+ * Look up factory equipment for a trade-in vehicle.
+ * In the browser, this routes through the /api/lookup-trade-equipment server proxy
+ * so that Google API calls execute server-side in Node with full search grounding.
+ */
+export async function lookupTradeEquipment(
+  input: { year: string; make: string; model: string; trim?: string },
+  options: LookupOptions = {}
+): Promise<EquipmentLookupResult | null> {
+  if (!input.year || !input.make || !input.model) return null;
+
+  if (typeof window !== 'undefined') {
+    try {
+      const res = await fetch('/api/lookup-trade-equipment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input, options }),
+      });
+      if (res.ok) {
+        return (await res.json()) as EquipmentLookupResult;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (data && typeof data.error === 'string') {
+        throw new EquipmentLookupError(data.error);
+      }
+      throw new Error(`HTTP ${res.status}`);
+    } catch (err: unknown) {
+      if (err instanceof EquipmentLookupError) throw err;
+      console.warn('Server trade equipment lookup failed, falling back to direct:', err);
+    }
+  }
+
+  return lookupTradeEquipmentDirect(input, options);
 }
 
 /** Thrown when every Gemini path failed; the message is short enough for the card. */

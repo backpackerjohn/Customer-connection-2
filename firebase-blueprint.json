@@ -230,6 +230,10 @@
         "payoff20Day": {
           "type": "string",
           "description": "20-day payoff amount for the payoff sheet; typed every deal"
+        },
+        "creditApp": {
+          "type": "object",
+          "description": "Credit application: creditType, applicant (residence/employment/income; identity lives on the customer), hasCoApplicant, coApplicant (full), references[4]. Never contains an SSN; the rules reject one under either applicant."
         }
       },
       "required": [

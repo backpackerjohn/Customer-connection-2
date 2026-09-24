@@ -527,6 +527,7 @@ describe('Firestore rules — Customer collection', () => {
       else if (k === 'createdAt' || k === 'updatedAt') full[k] = serverTimestamp();
       else if (k === 'status') full[k] = 'lead';
       else if (k === 'manualReminders') full[k] = [{ date: '2026-10-01', reason: 'call' }];
+      else if (k === 'creditApp') full[k] = { creditType: 'joint-spousal', applicant: { employer: 'Acme', yearsAtAddress: '3' }, hasCoApplicant: true, coApplicant: { firstName: 'John', lastName: 'Doe' }, references: [{ name: 'Mom', whose: 'A' }] };
       else if (k === 'payoffLender') full[k] = { lenderId: 'abc', phone: '888-925-2559', address: '4000 Monroe Rd', city: 'Charlotte', state: 'NC', zip: '28205' };
       else if (k === 'tradeCheckIn') full[k] = {
         equipment: Array.from({ length: 60 }, (_, i) => `Box ${i}`), unsure: ['A', 'B'],
@@ -583,6 +584,18 @@ describe('Firestore rules — Customer collection', () => {
     await assertFails(updateDoc(doc(bobDb, 'lenders/l1'), { verified: 'yes' }));
     await assertFails(getDocs(query(collection(anonContext().firestore(), 'lenders'))));
   });
+  // --- Credit application ---
+  it('46. creditApp is one map and can never carry an SSN', async () => {
+    const aliceDb = aliceContext().firestore();
+    await assertSucceeds(setDoc(doc(aliceDb, 'customers/ca1'), validCustomer({
+      creditApp: { creditType: 'individual', applicant: { employer: 'Acme', grossMonthlySalary: '4500' }, hasCoApplicant: false, references: [{ name: 'Mom', phone: '555', whose: 'A' }] },
+    })));
+    await assertFails(setDoc(doc(aliceDb, 'customers/ca2'), validCustomer({ creditApp: 'individual' })));
+    await assertFails(setDoc(doc(aliceDb, 'customers/ca3'), validCustomer({ creditApp: { applicant: { ssn: '123-45-6789' } } })));
+    await assertFails(setDoc(doc(aliceDb, 'customers/ca4'), validCustomer({ creditApp: { hasCoApplicant: true, coApplicant: { firstName: 'J', ssn: '987-65-4321' } } })));
+    await assertFails(setDoc(doc(aliceDb, 'customers/ca5'), validCustomer({ creditApp: { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7 } })));
+  });
 });
+
 
 

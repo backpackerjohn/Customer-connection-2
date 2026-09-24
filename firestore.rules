@@ -138,7 +138,15 @@ service cloud.firestore {
         && data.get('payoffLender', {}).size() <= 8
         && data.get('payoffAccountNumber', '').size() <= 50
         && data.get('payoffPerDiem', '').size() <= 20
-        && data.get('payoff20Day', '').size() <= 20;
+        && data.get('payoff20Day', '').size() <= 20
+
+        // Credit application (one map). An SSN must never be stored: the
+        // sheet only holds it in memory, and these two lines make sure a
+        // future bug cannot write one under either applicant.
+        && data.get('creditApp', {}) is map
+        && data.get('creditApp', {}).size() <= 6
+        && !('ssn' in data.get('creditApp', {}).get('applicant', {}))
+        && !('ssn' in data.get('creditApp', {}).get('coApplicant', {}));
     }
 
     // --- Lender library (shared by every signed-in dealer) ---
@@ -207,7 +215,7 @@ service cloud.firestore {
           'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
           'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working',
           'tradeIsBLine', 'tradeStockNumber', 'tradeCheckIn',
-            'payoffLender', 'payoffAccountNumber', 'payoffPerDiem', 'payoff20Day'
+            'payoffLender', 'payoffAccountNumber', 'payoffPerDiem', 'payoff20Day', 'creditApp'
         ])
         && incoming().createdAt == request.time
         && (incoming().updatedAt == request.time || !('updatedAt' in incoming()))
@@ -239,7 +247,7 @@ service cloud.firestore {
             'createdBy', 'createdAt', 'lastContactedAt', 'nextCadenceDue', 'manualReminders', 'purchaseDate', 'referralAskedAt',
             'leadSource', 'leadSourceType', 'leadGeneratedDate', 'pendingInterestNotes', 'contactChannel', 'working',
             'tradeIsBLine', 'tradeStockNumber', 'tradeCheckIn',
-            'payoffLender', 'payoffAccountNumber', 'payoffPerDiem', 'payoff20Day'
+            'payoffLender', 'payoffAccountNumber', 'payoffPerDiem', 'payoff20Day', 'creditApp'
           ])
         )
         && (incoming().get('updatedAt', request.time) == request.time);

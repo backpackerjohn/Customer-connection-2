@@ -27,4 +27,5 @@ export const FORM_SLOTS: FormSlot[] = [
   { id: 'three-liner', filename: 'three-liner.pdf', label: '3-Liner', description: 'Used when generating a Sold packet (cash deal).' },
   { id: 'buyers-guide', filename: 'buyers-guide.pdf', label: 'Buyers Guide', description: 'Used when generating a Trade packet (every trade).' },
   { id: 'trade-check-in', filename: 'trade-check-in.pdf', label: 'Trade Check-In Sheet', description: 'Used when generating a Trade packet (skipped for B-line trades).' },
+  { id: 'credit-app', filename: 'credit-app.pdf', label: 'Credit Application', description: 'Used by AI menu → Credit App (applicant and joint applicant sections).' },
 ];

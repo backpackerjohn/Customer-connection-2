@@ -14,6 +14,8 @@ import { motion, AnimatePresence } from 'motion/react';
 
 import { AIChatOverlay, ChatSeed } from './components/AIChatOverlay';
 import { DocumentTray, TrayItem } from './components/DocumentTray';
+import { CreditAppSheet } from './components/CreditAppSheet';
+import { CreditSsns } from './lib/creditApp';
 import { CaptureIntent } from './lib/captureIntent';
 import { NavItem } from './components/NavItem';
 import { NavIconButton } from './components/NavIconButton';
@@ -34,6 +36,8 @@ import {
   buildTestDrivePacket, 
   buildSoldPacket,
   buildTradePacket,
+  fillCreditApp,
+  creditAppFilename,
   downloadPdfBytes, 
   packetFilename,
   selectSoldForms,
@@ -75,6 +79,9 @@ export default function App() {
   const [isGeneratingPacket, setIsGeneratingPacket] = useState(false);
   const [isGeneratingSoldPacket, setIsGeneratingSoldPacket] = useState(false);
   const [isGeneratingTradePacket, setIsGeneratingTradePacket] = useState(false);
+  const [isCreditAppOpen, setIsCreditAppOpen] = useState(false);
+  const [isGeneratingCreditApp, setIsGeneratingCreditApp] = useState(false);
+  const [creditAppError, setCreditAppError] = useState<string | null>(null);
   const [isTradeLookingUp, setIsTradeLookingUp] = useState(false);
   const [tradeLookupError, setTradeLookupError] = useState<string | null>(null);
   const [isEstimatingTradeValue, setIsEstimatingTradeValue] = useState(false);
@@ -676,6 +683,31 @@ export default function App() {
     }
   };
 
+  /**
+   * Credit application: fills the applicant / joint applicant halves of the
+   * HMF template. The SSNs arrive from the sheet's local state for this one
+   * print and are never written anywhere.
+   */
+  const handleGenerateCreditApp = async (ssns: CreditSsns) => {
+    if (isGeneratingCreditApp) return;
+    setIsGeneratingCreditApp(true);
+    setCreditAppError(null);
+    try {
+      const meta = await getFormFileMetadata('credit-app.pdf');
+      if (!meta.exists) {
+        setCreditAppError('Upload the Credit Application template in Settings → Forms first.');
+        return;
+      }
+      const bytes = await fillCreditApp(currentCustomer, ssns);
+      downloadPdfBytes(bytes, creditAppFilename(currentCustomer));
+    } catch (err) {
+      console.error('Credit app generation failed:', err);
+      setCreditAppError('Could not generate the credit application. See console for details.');
+    } finally {
+      setIsGeneratingCreditApp(false);
+    }
+  };
+
   const handleSold = async () => {
     if (isGeneratingSoldPacket) return;
     
@@ -1026,6 +1058,7 @@ export default function App() {
               onTestDrive={handleTestDrive}
               onSold={handleSold}
               onTradePacket={handleTradePacket}
+              onCreditApp={() => { setCreditAppError(null); setIsCreditAppOpen(true); }}
               onTradeLookup={handleTradeLookup}
               isTradeLookingUp={isTradeLookingUp}
               tradeLookupError={tradeLookupError}
@@ -1063,6 +1096,16 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {isCreditAppOpen && (
+        <CreditAppSheet
+          customer={currentCustomer}
+          onChange={updateCustomerState}
+          onGenerate={handleGenerateCreditApp}
+          isGenerating={isGeneratingCreditApp}
+          error={creditAppError}
+          onClose={() => { setIsCreditAppOpen(false); setCreditAppError(null); }}
+        />
+      )}
       <AIChatOverlay
         isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}

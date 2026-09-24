@@ -63,6 +63,72 @@ export interface Lender {
   updatedAt?: FirestoreTimestamp;
 }
 
+/**
+ * One person on the credit application. For the APPLICANT the identity
+ * fields (name, dob, phone, email, address) are NOT stored here: they live on
+ * the Customer and edits write back to the profile. For the CO-APPLICANT they
+ * live here. The SSN is never stored anywhere; it is typed at print time only.
+ */
+export interface CreditApplicant {
+  firstName?: string;
+  middleInitial?: string;
+  lastName?: string;
+  dob?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  yearsAtAddress?: string;
+  monthsAtAddress?: string;
+  housingPayment?: string;
+  residentialStatus?: 'own' | 'rent' | 'parents' | 'other';
+  prevAddress?: string;
+  prevCity?: string;
+  prevState?: string;
+  prevZip?: string;
+  prevYears?: string;
+  prevMonths?: string;
+  employer?: string;
+  employerPhone?: string;
+  jobTitle?: string;
+  employedYears?: string;
+  employedMonths?: string;
+  grossMonthlySalary?: string;
+  employerAddress?: string;
+  employerCity?: string;
+  employerState?: string;
+  employerZip?: string;
+  prevEmployer?: string;
+  prevEmployerPhone?: string;
+  prevEmployerAddress?: string;
+  prevEmployerCity?: string;
+  prevEmployerState?: string;
+  prevEmployerZip?: string;
+  prevEmployedYears?: string;
+  prevEmployedMonths?: string;
+  otherIncomeSource?: string;
+  otherIncomeMonthly?: string;
+}
+
+export interface CreditReference {
+  name?: string;
+  address?: string;
+  phone?: string;
+  /** Whose reference: A = applicant, B = joint applicant, J = joint. */
+  whose?: 'A' | 'B' | 'J';
+}
+
+/** Credit application contents (see lib/creditApp.ts). One map so it costs the rules budget one field. */
+export interface CreditApp {
+  creditType?: 'individual' | 'joint-spousal' | 'joint-non-spousal' | 'rely-other-income';
+  applicant?: CreditApplicant;
+  hasCoApplicant?: boolean;
+  coApplicant?: CreditApplicant;
+  references?: CreditReference[];
+}
+
 export interface Customer {
   id?: string;
   firstName: string;
@@ -117,6 +183,8 @@ export interface Customer {
   monthsRemaining?: string;
   /** Payoff sheet, bank half: snapshot of the lender's payoff contact details. Dealer/library-only, never AI-extracted. */
   payoffLender?: PayoffLender;
+  /** Credit application (residence, employment, income, references, co-applicant). Dealer-only, never AI-extracted, never holds an SSN. */
+  creditApp?: CreditApp;
   /** Payoff sheet, deal half: typed every deal. Dealer-only, never AI-extracted. */
   payoffAccountNumber?: string;
   payoffPerDiem?: string;

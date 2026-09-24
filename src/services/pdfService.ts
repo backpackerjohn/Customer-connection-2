@@ -12,6 +12,7 @@ import {
   BUYERS_GUIDE_FIELDS,
   TRADE_CHECK_IN_FIELDS
 } from '../lib/pdfFieldMappings';
+import { creditAppFill, CreditSsns } from '../lib/creditApp';
 import { timed } from '../lib/timing';
 import { buyersGuideForCustomer } from '../lib/buyersGuideRules';
 import { APP_BOXES } from '../lib/tradeCheckInSheet';
@@ -346,6 +347,39 @@ export async function buildTradePacket(customer: Customer): Promise<Uint8Array> 
     }
     return await merged.save();
   });
+}
+
+/**
+ * Credit application: applicant + joint applicant halves only. The SSNs are
+ * passed in for this one fill and never stored. Missing template fields are
+ * logged and skipped so a template revision never blocks the print.
+ */
+export async function fillCreditApp(customer: Customer, ssns: CreditSsns): Promise<Uint8Array> {
+  return await timed('pdfService.fillCreditApp', async () => {
+    const url = await getBlankFormUrl('credit-app.pdf');
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch credit application: ${response.status}`);
+    const pdfDoc = await PDFDocument.load(await response.arrayBuffer());
+    const form = pdfDoc.getForm();
+    const { text, checks } = creditAppFill(customer, ssns);
+    for (const [name, value] of Object.entries(text)) {
+      try { form.getTextField(name).setText(value); }
+      catch (err) { console.warn(`Credit app field "${name}" not found:`, err); }
+    }
+    for (const [name, on] of Object.entries(checks)) {
+      try { const box = form.getCheckBox(name); if (on) box.check(); else box.uncheck(); }
+      catch (err) { console.warn(`Credit app checkbox "${name}" not found:`, err); }
+    }
+    return await pdfDoc.save();
+  });
+}
+
+export function creditAppFilename(customer: Customer): string {
+  const slug = `${customer.lastName ?? ''}_${customer.firstName ?? ''}`
+    .replace(/[^a-zA-Z0-9_]/g, '')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '') || 'Customer';
+  return `${slug}_Credit_App_${new Date().toISOString().slice(0, 10)}.pdf`;
 }
 
 export function tradePacketFilename(customer: Customer): string {

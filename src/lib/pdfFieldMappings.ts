@@ -17,7 +17,7 @@ function todayMMDDYYYY(): string {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
-function isoToMMDDYYYY(iso?: string): string {
+export function isoToMMDDYYYY(iso?: string): string {
   if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso ?? '';
   const [y, m, d] = iso.split('-');
   return `${m}/${d}/${y}`;
@@ -52,7 +52,7 @@ export const TEST_DRIVE_AGREEMENT_FIELDS: PdfFieldMapping[] = [
   { pdfFieldName: 'Insurance Agent', getValue: c => c.agentName ?? '' },
 ];
 
-function moneyOrEmpty(v?: string): string {
+export function moneyOrEmpty(v?: string): string {
   if (!v) return '';
   const num = parseFloat(v.replace(/[^0-9.]/g, ''));
   if (isNaN(num)) return v;

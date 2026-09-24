@@ -18,7 +18,8 @@ import {
   MessageSquare,
   Loader2,
   Images,
-  ClipboardList
+  ClipboardList,
+  CreditCard,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Customer, Note, Lender } from '../types';
@@ -62,6 +63,8 @@ interface Props {
   onSold: () => void;
   /** Buyers Guide (+ Check-In Sheet unless B-line) for the trade. Also runs automatically after Sold. */
   onTradePacket: () => void;
+  /** Open the credit application sheet (AI menu → Credit App). */
+  onCreditApp: () => void;
   /** Decode the trade VIN and look up the trim's equipment for the Check-In Sheet. */
   onTradeLookup: () => void;
   isTradeLookingUp: boolean;
@@ -108,6 +111,7 @@ export function CustomerProfileView({
   onTestDrive,
   onSold,
   onTradePacket,
+  onCreditApp,
   onTradeLookup,
   isTradeLookingUp,
   tradeLookupError,
@@ -323,6 +327,12 @@ export function CustomerProfileView({
                 label="Trade"
                 onClick={isGeneratingTradePacket ? undefined : onTradePacket}
                 disabled={!currentCustomer.id || !currentCustomer.hasTradeIn || isGeneratingTradePacket}
+              />
+              <SubButton
+                icon={<CreditCard size={20} />}
+                label="Credit App"
+                onClick={onCreditApp}
+                disabled={!currentCustomer.id}
               />
             </motion.div>
           )}

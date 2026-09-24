@@ -289,7 +289,7 @@ export function CustomerProfileView({
             <motion.div 
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              className="flex justify-around w-full"
+              className="flex w-full overflow-x-auto px-4 gap-2 [scrollbar-width:none] [&>*]:shrink-0 [&>*]:flex-1 [&>*]:min-w-[64px]"
             >
               <SubButton 
                 icon={<MessageSquare size={20} />} 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applicantView, creditAppFill, creditAppHoldsSsn, splitPhone } from './creditApp';
+import { applicantView, creditAppFill, creditAppHoldsSsn, isJointCredit, splitPhone, underTwoYears } from './creditApp';
 import { Customer, emptyCustomer } from '../types';
 
 const base: Customer = {
@@ -65,13 +65,30 @@ describe('creditAppFill', () => {
     expect(checks['J2']).toBe(true);
     expect(checks['B2']).toBe(false);
   });
-  it('leaves the joint half and the dealer box alone when there is no co-applicant', () => {
-    const solo = creditAppFill({ ...base, creditApp: { ...base.creditApp, hasCoApplicant: false } });
+  it('leaves the joint half and the dealer box alone when the credit type is not joint', () => {
+    const solo = creditAppFill({ ...base, creditApp: { ...base.creditApp, creditType: 'individual' } });
     expect(solo.text['Secondary First Name']).toBeUndefined();
     expect(solo.text['Primary Social Security Number']).toBe('');
     expect(solo.text['Dealer Name']).toBeUndefined();
     expect(solo.text['Cash Price']).toBeUndefined();
     expect(solo.checks['retail']).toBeUndefined();
+  });
+});
+
+describe('isJointCredit / underTwoYears', () => {
+  it('only the two joint types carry a joint applicant', () => {
+    expect(isJointCredit('joint-spousal')).toBe(true);
+    expect(isJointCredit('joint-non-spousal')).toBe(true);
+    expect(isJointCredit('individual')).toBe(false);
+    expect(isJointCredit('rely-other-income')).toBe(false);
+    expect(isJointCredit(undefined)).toBe(false);
+  });
+  it('flags under two years, ignores blanks', () => {
+    expect(underTwoYears('1')).toBe(true);
+    expect(underTwoYears('0')).toBe(true);
+    expect(underTwoYears('2')).toBe(false);
+    expect(underTwoYears('')).toBe(false);
+    expect(underTwoYears(undefined)).toBe(false);
   });
 });
 

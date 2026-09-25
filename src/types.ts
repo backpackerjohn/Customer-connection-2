@@ -124,6 +124,7 @@ export interface CreditReference {
 export interface CreditApp {
   creditType?: 'individual' | 'joint-spousal' | 'joint-non-spousal' | 'rely-other-income';
   applicant?: CreditApplicant;
+  /** Legacy, no longer written or read: the joint applicant exists exactly when creditType is joint. */
   hasCoApplicant?: boolean;
   coApplicant?: CreditApplicant;
   references?: CreditReference[];

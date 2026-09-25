@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { Camera, Loader2 } from 'lucide-react';
 import { CreditApp, CreditApplicant, CreditReference, Customer } from '../types';
 import { InputField } from './InputField';
-import { Toggle } from './Toggle';
-import { CREDIT_TYPES, IDENTITY_KEYS, RESIDENTIAL_STATUSES, applicantView } from '../lib/creditApp';
+import { CREDIT_TYPES, IDENTITY_KEYS, RESIDENTIAL_STATUSES, applicantView, hasJointApplicant, underTwoYears } from '../lib/creditApp';
 import { stripUndefined } from '../lib/lenders';
+import { normalizeImageForVision } from '../lib/imageNormalizer';
+import { processCustomerChat } from '../services/aiService';
 
 interface Props {
   customer: Customer;
@@ -41,16 +43,13 @@ export function CreditAppFields({ customer, onChange }: Props) {
       <div className="card p-6 space-y-3">
         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Type of credit</p>
         <Chips options={CREDIT_TYPES} value={app.creditType} onChange={v => setApp({ creditType: v })} />
-        <div className="flex items-center justify-between pt-2">
-          <span className="font-semibold text-gray-700">Co-applicant?</span>
-          <Toggle active={!!app.hasCoApplicant} onToggle={() => setApp({ hasCoApplicant: !app.hasCoApplicant })} />
-        </div>
+        <p className="text-xs text-gray-400">Choosing a Joint type adds the joint applicant below. Adding a co-signer later is just changing this. Anything typed for them is kept if you switch back.</p>
       </div>
 
       <ApplicantSection title="Applicant" a={applicantView(customer)} onChange={onApplicant} />
 
-      {app.hasCoApplicant && (
-        <ApplicantSection title="Joint applicant" a={app.coApplicant ?? {}} onChange={onCo} />
+      {hasJointApplicant(app) && (
+        <ApplicantSection title="Joint applicant" a={app.coApplicant ?? {}} onChange={onCo} allowLicensePhoto />
       )}
 
       <div className="card p-6 space-y-4">
@@ -89,13 +88,58 @@ export function Chips<T extends string>({ options, value, onChange, small }: { o
   );
 }
 
-function ApplicantSection({ title, a, onChange }: { title: string; a: CreditApplicant; onChange: (patch: Partial<CreditApplicant>) => void }) {
+/** Identity keys a license photo can supply (never phone or email). */
+const LICENSE_KEYS: (keyof CreditApplicant)[] = ['firstName', 'middleInitial', 'lastName', 'dob', 'address', 'city', 'state', 'zip'];
+
+function ApplicantSection({ title, a, onChange, allowLicensePhoto }: { title: string; a: CreditApplicant; onChange: (patch: Partial<CreditApplicant>) => void; allowLicensePhoto?: boolean }) {
   const [showPrevAddr, setShowPrevAddr] = useState(!!(a.prevAddress || a.prevCity));
   const [showPrevEmp, setShowPrevEmp] = useState(!!a.prevEmployer);
+  const [reading, setReading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const f = (k: keyof CreditApplicant) => (v: string) => onChange({ [k]: v });
+  // Lenders want these when under two years, so open them automatically.
+  const needPrevAddr = underTwoYears(a.yearsAtAddress);
+  const needPrevEmp = underTwoYears(a.employedYears);
+
+  /** Read the joint applicant's license and fill only their identity fields. The photo is not stored. */
+  const readLicense = async (file: File) => {
+    setReading(true); setPhotoError(null);
+    try {
+      const normalized = await normalizeImageForVision(file);
+      const res = await processCustomerChat('', {}, [], { inlineData: { data: normalized.base64, mimeType: normalized.mimeType } }, 'license');
+      const patch: Partial<CreditApplicant> = {};
+      for (const k of LICENSE_KEYS) {
+        const v = res.updatedFields[k];
+        if (typeof v === 'string' && v.trim()) (patch as Record<string, string>)[k] = v.trim();
+      }
+      if (!Object.keys(patch).length) throw new Error('No name or address could be read from that photo.');
+      onChange(patch);
+    } catch (err) {
+      console.error('Joint applicant license read failed:', err);
+      setPhotoError(err instanceof Error ? err.message : 'Could not read the license.');
+    } finally {
+      setReading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <h3 className="text-base font-bold px-2">{title}</h3>
+      <div className="flex items-center gap-2 px-2">
+        <h3 className="text-base font-bold">{title}</h3>
+        {allowLicensePhoto && (
+          <>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => { const file = e.target.files?.[0]; if (file) void readLicense(file); }} />
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={reading}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs font-bold disabled:opacity-40"
+              aria-label="Read the joint applicant's license">
+              {reading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />} License photo
+            </button>
+          </>
+        )}
+      </div>
+      {photoError && <p className="text-xs text-red-600 px-2">{photoError}</p>}
       <div className="card p-6 space-y-4">
         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Identity</p>
         <div className="grid grid-cols-[1fr_4rem_1fr] gap-4">
@@ -124,10 +168,12 @@ function ApplicantSection({ title, a, onChange }: { title: string; a: CreditAppl
           <InputField label="Rent / mortgage $" value={a.housingPayment} onChange={f('housingPayment')} />
         </div>
         <Chips options={RESIDENTIAL_STATUSES} value={a.residentialStatus} onChange={v => onChange({ residentialStatus: v })} />
-        <button type="button" onClick={() => setShowPrevAddr(s => !s)} className="text-xs font-bold text-blue-700 underline">
-          {showPrevAddr ? 'Hide' : 'Add'} previous address (if under 2 years here)
-        </button>
-        {showPrevAddr && (
+        {needPrevAddr
+          ? <p className="text-xs font-bold text-amber-700">Under 2 years at this address: the lender needs the previous address.</p>
+          : <button type="button" onClick={() => setShowPrevAddr(s => !s)} className="text-xs font-bold text-blue-700 underline">
+              {showPrevAddr ? 'Hide' : 'Add'} previous address (if under 2 years here)
+            </button>}
+        {(showPrevAddr || needPrevAddr) && (
           <div className="space-y-4">
             <InputField label="Previous street address" value={a.prevAddress} onChange={f('prevAddress')} />
             <div className="grid grid-cols-[2fr_1fr_1fr] gap-4">
@@ -163,10 +209,12 @@ function ApplicantSection({ title, a, onChange }: { title: string; a: CreditAppl
           <InputField label="State" value={a.employerState} onChange={v => onChange({ employerState: v.toUpperCase() })} />
           <InputField label="Zip" value={a.employerZip} onChange={f('employerZip')} />
         </div>
-        <button type="button" onClick={() => setShowPrevEmp(s => !s)} className="text-xs font-bold text-blue-700 underline">
-          {showPrevEmp ? 'Hide' : 'Add'} previous employer (if under 2 years)
-        </button>
-        {showPrevEmp && (
+        {needPrevEmp
+          ? <p className="text-xs font-bold text-amber-700">Under 2 years with this employer: the lender needs the previous employer.</p>
+          : <button type="button" onClick={() => setShowPrevEmp(s => !s)} className="text-xs font-bold text-blue-700 underline">
+              {showPrevEmp ? 'Hide' : 'Add'} previous employer (if under 2 years)
+            </button>}
+        {(showPrevEmp || needPrevEmp) && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <InputField label="Previous employer" value={a.prevEmployer} onChange={f('prevEmployer')} />

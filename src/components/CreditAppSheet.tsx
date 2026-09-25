@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, FileDown, Loader2, X } from 'lucide-react';
 import { Customer } from '../types';
-import { CreditSsns } from '../lib/creditApp';
+import { CreditSsns, hasJointApplicant } from '../lib/creditApp';
 
 interface Props {
   customer: Customer;
@@ -18,6 +18,7 @@ interface Props {
  */
 export function CreditAppSheet({ customer, onGenerate, isGenerating, error, onClose }: Props) {
   const app = customer.creditApp ?? {};
+  const joint = hasJointApplicant(app);
   const [ssn, setSsn] = useState('');
   const [coSsn, setCoSsn] = useState('');
   const [show, setShow] = useState(false);
@@ -26,7 +27,7 @@ export function CreditAppSheet({ customer, onGenerate, isGenerating, error, onCl
 
   const generate = () => onGenerate({
     applicant: ssn.trim() || undefined,
-    coApplicant: app.hasCoApplicant ? coSsn.trim() || undefined : undefined,
+    coApplicant: joint ? coSsn.trim() || undefined : undefined,
   });
 
   return (
@@ -35,7 +36,7 @@ export function CreditAppSheet({ customer, onGenerate, isGenerating, error, onCl
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-lg font-bold">Print credit application</h2>
-            <p className="text-xs text-gray-500">{name}{app.hasCoApplicant ? ` + ${coName}` : ''}</p>
+            <p className="text-xs text-gray-500">{name}{joint ? ` + ${coName}` : ''}</p>
           </div>
           <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500" aria-label="Close"><X size={18} /></button>
         </div>
@@ -45,7 +46,7 @@ export function CreditAppSheet({ customer, onGenerate, isGenerating, error, onCl
         </p>
 
         <SsnField label={`${name} · SSN`} value={ssn} onChange={setSsn} show={show} />
-        {app.hasCoApplicant && <SsnField label={`${coName} · SSN`} value={coSsn} onChange={setCoSsn} show={show} />}
+        {joint && <SsnField label={`${coName} · SSN`} value={coSsn} onChange={setCoSsn} show={show} />}
         <button type="button" onClick={() => setShow(s => !s)} className="flex items-center gap-1.5 text-xs text-gray-500">
           {show ? <EyeOff size={14} /> : <Eye size={14} />} {show ? 'Hide' : 'Show'} numbers
         </button>

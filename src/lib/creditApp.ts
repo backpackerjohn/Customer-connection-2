@@ -26,6 +26,22 @@ export const RESIDENTIAL_STATUSES: { id: ResidentialStatus; label: string }[] = 
   { id: 'other', label: 'Other' },
 ];
 
+/** Joint credit types are the only ones that print (and show) a joint applicant. */
+export function isJointCredit(type: CreditApp['creditType'] | undefined): boolean {
+  return type === 'joint-spousal' || type === 'joint-non-spousal';
+}
+
+/** The joint applicant exists exactly when the credit type is joint. (`hasCoApplicant` is a legacy field and is ignored.) */
+export function hasJointApplicant(app: CreditApp | undefined): boolean {
+  return isJointCredit(app?.creditType);
+}
+
+/** "0", "1", "1.5" → true; blank, "2", "10" → false. Lenders want the previous address / employer when under two years. */
+export function underTwoYears(years?: string): boolean {
+  const n = parseFloat((years ?? '').trim());
+  return Number.isFinite(n) && n < 2;
+}
+
 /** Applicant identity fields live on the Customer, not in creditApp.applicant. */
 export const IDENTITY_KEYS = ['firstName', 'middleInitial', 'lastName', 'dob', 'phone', 'email', 'address', 'city', 'state', 'zip'] as const;
 export type IdentityKey = (typeof IDENTITY_KEYS)[number];
@@ -140,7 +156,7 @@ export function creditAppFill(c: Customer, ssns: CreditSsns = {}): CreditAppFill
 
   const applicant = applicantView(c);
   person('Primary', applicant, ssns.applicant, { own: 'OwnHome', rent: 'Lease', parents: 'LiveRel', other: 'undefined' });
-  const co = app.hasCoApplicant ? app.coApplicant : undefined;
+  const co = hasJointApplicant(app) ? (app.coApplicant ?? {}) : undefined;
   if (co) person('Secondary', co, ssns.coApplicant, { own: 'Own_2', rent: 'Rent_2', parents: 'Parents_2', other: 'undefined_4' });
 
   const incomes = [applicant.otherIncomeMonthly, co?.otherIncomeMonthly].map(parseMoney).filter((n): n is number => n !== null);

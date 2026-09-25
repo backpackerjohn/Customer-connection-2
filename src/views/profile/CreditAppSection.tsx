@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, CreditCard } from 'lucide-react';
 import { Customer } from '../../types';
 import { CreditAppFields } from '../../components/CreditAppFields';
-import { CREDIT_TYPES } from '../../lib/creditApp';
+import { CREDIT_TYPES, hasJointApplicant } from '../../lib/creditApp';
 
 interface Props {
   customer: Customer;
@@ -17,12 +17,12 @@ interface Props {
  */
 export function CreditAppSection({ customer, onChange }: Props) {
   const app = customer.creditApp ?? {};
-  const filled = !!(app.creditType || app.applicant?.employer || app.applicant?.yearsAtAddress || app.hasCoApplicant || app.references?.some(r => r?.name));
+  const filled = !!(app.creditType || app.applicant?.employer || app.applicant?.yearsAtAddress || hasJointApplicant(app) || app.references?.some(r => r?.name));
   const [open, setOpen] = useState(false);
   const summary = [
     CREDIT_TYPES.find(t => t.id === app.creditType)?.label,
     app.applicant?.employer ? `works at ${app.applicant.employer}` : undefined,
-    app.hasCoApplicant ? `joint with ${[app.coApplicant?.firstName, app.coApplicant?.lastName].filter(Boolean).join(' ') || 'co-applicant'}` : undefined,
+    hasJointApplicant(app) ? `joint with ${[app.coApplicant?.firstName, app.coApplicant?.lastName].filter(Boolean).join(' ') || 'co-applicant'}` : undefined,
   ].filter(Boolean).join(' · ');
 
   return (

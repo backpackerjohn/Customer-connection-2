@@ -34,14 +34,14 @@ describe('applicantView', () => {
 
 describe('creditAppFill', () => {
   const { text, checks } = creditAppFill(base, { applicant: '123-45-6789', coApplicant: '987-65-4321' });
-  it('fills the applicant half from the profile, mobile only, SSN from the argument', () => {
+  it('fills the applicant half from the profile, mobile in the Home Phone box, SSN from the argument', () => {
     expect(text['Primary Last Name']).toBe('Doe');
     expect(text['Primary Middle Name']).toBe('Q');
     expect(text['Primary Birth Date']).toBe('02/03/1990');
     expect(text['Primary Social Security Number']).toBe('123-45-6789');
-    expect(text['Primary Mobile Area Code']).toBe('740');
-    expect(text['Primary Mobile Line Number']).toBe('1234');
-    expect(text['Primary Evening Home Area Code']).toBeUndefined();
+    expect(text['Primary Evening Home Area Code']).toBe('740');
+    expect(text['Primary Evening Home Line Number']).toBe('1234');
+    expect(text['Primary Mobile Area Code']).toBeUndefined();
     expect(text['Primary Current State Abbreviation']).toBe('OH');
     expect(text['Primary Current Mortgage or Rent Payment']).toBe('$1,200');
     expect(text['Primary Current Employment Salary']).toBe('$4,500.5');
@@ -49,7 +49,7 @@ describe('creditAppFill', () => {
     expect(checks['Lease']).toBe(true);
     expect(checks['OwnHome']).toBe(false);
   });
-  it('fills the joint half, using the home phone box for the mobile number', () => {
+  it('fills the joint half the same way', () => {
     expect(text['Secondary First Name']).toBe('John');
     expect(text['Secondary Social Security Number']).toBe('987-65-4321');
     expect(text['Secondary Evening Home Area Code']).toBe('740');

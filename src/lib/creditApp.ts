@@ -86,15 +86,12 @@ export function creditAppFill(c: Customer, ssns: CreditSsns = {}): CreditAppFill
     text[`${p} Birth Date`] = isoToMMDDYYYY(a.dob);
     text[`${p} Social Security Number`] = str(ssn);
 
-    // The store always uses the mobile number. The applicant half has mobile
-    // fields; the joint half only has the "Home Phone" box, so it goes there.
+    // Store practice: the "Home Phone Number" box on each side is the
+    // applicant's mobile. The template's small "Primary Mobile" cell field on
+    // the joint side is not used and stays blank.
     const [ac, prefix, line] = splitPhone(a.phone);
-    if (p === 'Primary') {
-      text['Primary Mobile Area Code'] = ac; text['Primary Mobile Prefix'] = prefix; text['Primary Mobile Line Number'] = line;
-      text['Primary Email'] = str(a.email);
-    } else {
-      text['Secondary Evening Home Area Code'] = ac; text['Secondary Evening Home Prefix'] = prefix; text['Secondary Evening Home Line Number'] = line;
-    }
+    text[`${p} Evening Home Area Code`] = ac; text[`${p} Evening Home Prefix`] = prefix; text[`${p} Evening Home Line Number`] = line;
+    if (p === 'Primary') text['Primary Email'] = str(a.email);
 
     text[`${p} Current Address Line 1`] = str(a.address);
     text[`${p} Current City`] = str(a.city);

@@ -1099,7 +1099,6 @@ export default function App() {
       {isCreditAppOpen && (
         <CreditAppSheet
           customer={currentCustomer}
-          onChange={updateCustomerState}
           onGenerate={handleGenerateCreditApp}
           isGenerating={isGeneratingCreditApp}
           error={creditAppError}

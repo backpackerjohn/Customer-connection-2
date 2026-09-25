@@ -37,6 +37,7 @@ import { NewVehicleSection } from './profile/NewVehicleSection';
 import { TradeInSection } from './profile/TradeInSection';
 import { TradeCheckInSection } from './profile/TradeCheckInSection';
 import { GoalsSection } from './profile/GoalsSection';
+import { CreditAppSection } from './profile/CreditAppSection';
 import { TimelineNotesSection } from './profile/TimelineNotesSection';
 
 interface Props {
@@ -216,6 +217,7 @@ export function CustomerProfileView({
           />
         )}
         <GoalsSection customer={currentCustomer} onChange={onUpdateCustomer} />
+        <CreditAppSection customer={currentCustomer} onChange={onUpdateCustomer} />
         <TimelineNotesSection 
           customer={currentCustomer}
           notes={notes}

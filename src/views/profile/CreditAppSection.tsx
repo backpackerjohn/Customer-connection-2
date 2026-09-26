@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, CreditCard } from 'lucide-react';
 import { Customer } from '../../types';
 import { CreditAppFields } from '../../components/CreditAppFields';
-import { CREDIT_TYPES, hasJointApplicant } from '../../lib/creditApp';
+import { CREDIT_TYPES, CreditSsns, hasJointApplicant } from '../../lib/creditApp';
 
 interface Props {
   customer: Customer;
   onChange: (patch: Partial<Customer>) => void;
+  ssns: CreditSsns;
+  onSsnsChange: (ssns: CreditSsns) => void;
 }
 
 /**
@@ -15,7 +17,7 @@ interface Props {
  * employment, income, references and the joint applicant. Printing (with the
  * SSNs) is AI menu → Credit App.
  */
-export function CreditAppSection({ customer, onChange }: Props) {
+export function CreditAppSection({ customer, onChange, ssns, onSsnsChange }: Props) {
   const app = customer.creditApp ?? {};
   const filled = !!(app.creditType || app.applicant?.employer || app.applicant?.yearsAtAddress || hasJointApplicant(app) || app.references?.some(r => r?.name));
   const [open, setOpen] = useState(false);
@@ -44,10 +46,10 @@ export function CreditAppSection({ customer, onChange }: Props) {
       {!open && (
         <div className="card p-4 text-sm text-gray-500">
           {summary || 'Nothing entered yet. Name, birth date, mobile, email and address come from Customer Info; the rest is filled here.'}
-          <span className="block text-xs text-gray-400 mt-1">Print with the SSNs from the Ai menu → Credit App. SSNs are never saved.</span>
+          <span className="block text-xs text-gray-400 mt-1">Print from the Ai menu → Credit App. SSNs are held in memory only and never saved.</span>
         </div>
       )}
-      {open && <CreditAppFields customer={customer} onChange={onChange} />}
+      {open && <CreditAppFields customer={customer} onChange={onChange} ssns={ssns} onSsnsChange={onSsnsChange} />}
     </section>
   );
 }

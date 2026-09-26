@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { lookupLenderDirect } from './src/services/lenderLookupService';
 import { lookupTradeEquipmentDirect } from './src/services/tradeEquipmentService';
+import { lookupEmployerDirect } from './src/services/employerLookupService';
 
 dotenv.config();
 
@@ -40,6 +41,23 @@ app.post('/api/lookup-trade-equipment', async (req: Request, res: Response) => {
     return res.json(result);
   } catch (err: unknown) {
     console.error('Server /api/lookup-trade-equipment error:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    return res.status(500).json({ error: message });
+  }
+});
+
+// API route: Employer lookup for the credit application (Places when
+// GOOGLE_PLACES_API_KEY is set, otherwise Gemini with Google Search grounding)
+app.post('/api/lookup-employer', async (req: Request, res: Response) => {
+  const { query, near } = req.body || {};
+  if (!query || typeof query !== 'string' || query.trim().length < 2) {
+    return res.status(400).json({ error: 'type the employer name first' });
+  }
+  try {
+    const result = await lookupEmployerDirect(query.trim(), near && typeof near === 'object' ? near : {});
+    return res.json(result);
+  } catch (err: unknown) {
+    console.error('Server /api/lookup-employer error:', err);
     const message = err instanceof Error ? err.message : String(err);
     return res.status(500).json({ error: message });
   }

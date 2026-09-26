@@ -1,8 +1,10 @@
 import React, { useRef, useState } from 'react';
-import { Camera, Loader2 } from 'lucide-react';
+import { Camera, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { CreditApp, CreditApplicant, CreditReference, Customer } from '../types';
 import { InputField } from './InputField';
-import { CREDIT_TYPES, IDENTITY_KEYS, RESIDENTIAL_STATUSES, applicantView, hasJointApplicant, underTwoYears } from '../lib/creditApp';
+import { EmployerPicker } from './EmployerPicker';
+import { CREDIT_TYPES, CreditSsns, IDENTITY_KEYS, RESIDENTIAL_STATUSES, applicantView, hasJointApplicant, underTwoYears } from '../lib/creditApp';
+import { employerPatch, searchCenter } from '../lib/employers';
 import { stripUndefined } from '../lib/lenders';
 import { normalizeImageForVision } from '../lib/imageNormalizer';
 import { processCustomerChat } from '../services/aiService';
@@ -10,14 +12,18 @@ import { processCustomerChat } from '../services/aiService';
 interface Props {
   customer: Customer;
   onChange: (patch: Partial<Customer>) => void;
+  /** SSNs live in App memory for the open customer only; never in the customer record. */
+  ssns: CreditSsns;
+  onSsnsChange: (ssns: CreditSsns) => void;
 }
 
 /**
- * Every credit application field except the SSNs, which are typed only at
- * print time (see CreditAppSheet). Applicant identity edits write back to the
- * customer profile; everything else lives in customer.creditApp.
+ * Every credit application field. Applicant identity edits write back to the
+ * customer profile; everything else lives in customer.creditApp. The SSNs are
+ * typed here too but are held only in memory (App state) until the dealer
+ * leaves the customer; they are never written to the database.
  */
-export function CreditAppFields({ customer, onChange }: Props) {
+export function CreditAppFields({ customer, onChange, ssns, onSsnsChange }: Props) {
   const app: CreditApp = customer.creditApp ?? {};
   const setApp = (patch: Partial<CreditApp>) => onChange({ creditApp: stripUndefined({ ...app, ...patch }) });
 
@@ -46,10 +52,12 @@ export function CreditAppFields({ customer, onChange }: Props) {
         <p className="text-xs text-gray-400">Choosing a Joint type adds the joint applicant below. Adding a co-signer later is just changing this. Anything typed for them is kept if you switch back.</p>
       </div>
 
-      <ApplicantSection title="Applicant" a={applicantView(customer)} onChange={onApplicant} />
+      <ApplicantSection title="Applicant" a={applicantView(customer)} onChange={onApplicant}
+        ssn={ssns.applicant ?? ''} onSsn={v => onSsnsChange({ ...ssns, applicant: v || undefined })} />
 
       {hasJointApplicant(app) && (
-        <ApplicantSection title="Joint applicant" a={app.coApplicant ?? {}} onChange={onCo} allowLicensePhoto />
+        <ApplicantSection title="Joint applicant" a={app.coApplicant ?? {}} onChange={onCo} allowLicensePhoto
+          ssn={ssns.coApplicant ?? ''} onSsn={v => onSsnsChange({ ...ssns, coApplicant: v || undefined })} />
       )}
 
       <div className="card p-6 space-y-4">
@@ -91,7 +99,27 @@ export function Chips<T extends string>({ options, value, onChange, small }: { o
 /** Identity keys a license photo can supply (never phone or email). */
 const LICENSE_KEYS: (keyof CreditApplicant)[] = ['firstName', 'middleInitial', 'lastName', 'dob', 'address', 'city', 'state', 'zip'];
 
-function ApplicantSection({ title, a, onChange, allowLicensePhoto }: { title: string; a: CreditApplicant; onChange: (patch: Partial<CreditApplicant>) => void; allowLicensePhoto?: boolean }) {
+function SsnField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [show, setShow] = useState(false);
+  const digits = value.replace(/\D/g, '');
+  return (
+    <div className="space-y-1.5 flex-1">
+      <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1 leading-none">SSN · not saved</label>
+      <div className="flex gap-2 items-center">
+        <input type={show ? 'text' : 'password'} inputMode="numeric" autoComplete="off" value={value} onChange={e => onChange(e.target.value)} placeholder="###-##-####"
+          className="w-full bg-amber-50 border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-gray-900 transition-all font-medium text-sm tracking-widest" />
+        <button type="button" onClick={() => setShow(s => !s)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500" aria-label={show ? 'Hide SSN' : 'Show SSN'}>
+          {show ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+        {value && <button type="button" onClick={() => onChange('')} className="text-[11px] font-bold text-gray-500 underline">Clear</button>}
+      </div>
+      <p className="text-[11px] text-gray-400 px-1">{digits.length >= 4 && !show ? `ends in ${digits.slice(-4)} · ` : ''}Held in memory only; gone when you leave this customer.</p>
+    </div>
+  );
+}
+
+function ApplicantSection({ title, a, onChange, allowLicensePhoto, ssn, onSsn }: { title: string; a: CreditApplicant; onChange: (patch: Partial<CreditApplicant>) => void; allowLicensePhoto?: boolean; ssn: string; onSsn: (v: string) => void }) {
+  const near = searchCenter(a);
   const [showPrevAddr, setShowPrevAddr] = useState(!!(a.prevAddress || a.prevCity));
   const [showPrevEmp, setShowPrevEmp] = useState(!!a.prevEmployer);
   const [reading, setReading] = useState(false);
@@ -151,7 +179,10 @@ function ApplicantSection({ title, a, onChange, allowLicensePhoto }: { title: st
           <InputField label="Date of birth" type="date" value={a.dob} onChange={f('dob')} />
           <InputField label="Mobile" value={a.phone} onChange={f('phone')} />
         </div>
-        <InputField label="Email" value={a.email} onChange={f('email')} />
+        <div className="grid grid-cols-2 gap-4">
+          <InputField label="Email" value={a.email} onChange={f('email')} />
+          <SsnField value={ssn} onChange={onSsn} />
+        </div>
         <InputField label="Street address" value={a.address} onChange={f('address')} />
         <div className="grid grid-cols-[2fr_1fr_1fr] gap-4">
           <InputField label="City" value={a.city} onChange={f('city')} />
@@ -191,10 +222,8 @@ function ApplicantSection({ title, a, onChange, allowLicensePhoto }: { title: st
 
       <div className="card p-6 space-y-4">
         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 ml-1">Employment</p>
-        <div className="grid grid-cols-2 gap-4">
-          <InputField label="Employer" value={a.employer} onChange={f('employer')} />
-          <InputField label="Employer phone" value={a.employerPhone} onChange={f('employerPhone')} />
-        </div>
+        <EmployerPicker label="Employer" value={a.employer} onNameChange={f('employer')} onPick={e => onChange(employerPatch('current', e))} near={near} />
+        <InputField label="Employer phone" value={a.employerPhone} onChange={f('employerPhone')} />
         <div className="grid grid-cols-[2fr_1fr_1fr] gap-4">
           <InputField label="Job title" value={a.jobTitle} onChange={f('jobTitle')} />
           <InputField label="Years" value={a.employedYears} onChange={f('employedYears')} />
@@ -216,10 +245,8 @@ function ApplicantSection({ title, a, onChange, allowLicensePhoto }: { title: st
             </button>}
         {(showPrevEmp || needPrevEmp) && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <InputField label="Previous employer" value={a.prevEmployer} onChange={f('prevEmployer')} />
-              <InputField label="Phone" value={a.prevEmployerPhone} onChange={f('prevEmployerPhone')} />
-            </div>
+            <EmployerPicker label="Previous employer" value={a.prevEmployer} onNameChange={f('prevEmployer')} onPick={e => onChange(employerPatch('previous', e))} near={near} />
+            <InputField label="Phone" value={a.prevEmployerPhone} onChange={f('prevEmployerPhone')} />
             <InputField label="Street" value={a.prevEmployerAddress} onChange={f('prevEmployerAddress')} />
             <div className="grid grid-cols-[2fr_1fr_1fr] gap-4">
               <InputField label="City" value={a.prevEmployerCity} onChange={f('prevEmployerCity')} />

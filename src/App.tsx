@@ -82,6 +82,8 @@ export default function App() {
   const [isCreditAppOpen, setIsCreditAppOpen] = useState(false);
   const [isGeneratingCreditApp, setIsGeneratingCreditApp] = useState(false);
   const [creditAppError, setCreditAppError] = useState<string | null>(null);
+  /** Credit application SSNs for the OPEN customer only. Memory only, cleared on leaving the profile; never persisted. */
+  const [creditSsns, setCreditSsns] = useState<CreditSsns>({});
   const [isTradeLookingUp, setIsTradeLookingUp] = useState(false);
   const [tradeLookupError, setTradeLookupError] = useState<string | null>(null);
   const [isEstimatingTradeValue, setIsEstimatingTradeValue] = useState(false);
@@ -303,6 +305,7 @@ export default function App() {
   }, [user, currentCustomer.id]);
 
   const handleNewCustomer = () => {
+    setCreditSsns({});
     setCurrentCustomer(emptyCustomer);
     lastSavedRef.current = emptyCustomer;
     setSaveStatus('idle');
@@ -312,6 +315,7 @@ export default function App() {
   };
 
   const handleEditCustomer = (customer: Customer) => {
+    setCreditSsns({});
     setCurrentCustomer(customer);
     lastSavedRef.current = customer;
     setSaveStatus('synced');
@@ -1049,7 +1053,7 @@ export default function App() {
               testDriveError={testDriveError}
               soldError={soldError}
               valuationError={valuationError}
-              onBack={() => setView('dashboard')}
+              onBack={() => { setCreditSsns({}); setView('dashboard'); }}
               onUpdateCustomer={updateCustomerState}
               onNewNoteChange={setNewNote}
               onAddNote={handleAddNote}
@@ -1067,6 +1071,8 @@ export default function App() {
               onOpenDocumentTray={handleOpenDocumentTray}
               lenders={lenders}
               userId={user?.uid ?? ''}
+              creditSsns={creditSsns}
+              onCreditSsnsChange={setCreditSsns}
             />
           </motion.div>
         )}
@@ -1099,6 +1105,8 @@ export default function App() {
       {isCreditAppOpen && (
         <CreditAppSheet
           customer={currentCustomer}
+          ssns={creditSsns}
+          onSsnsChange={setCreditSsns}
           onGenerate={handleGenerateCreditApp}
           isGenerating={isGeneratingCreditApp}
           error={creditAppError}

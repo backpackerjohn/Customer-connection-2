@@ -5,6 +5,9 @@ import { CreditSsns, hasJointApplicant } from '../lib/creditApp';
 
 interface Props {
   customer: Customer;
+  /** Held in App memory for the open customer; typed here or on the profile card. */
+  ssns: CreditSsns;
+  onSsnsChange: (ssns: CreditSsns) => void;
   onGenerate: (ssns: CreditSsns) => void | Promise<void>;
   isGenerating: boolean;
   error: string | null;
@@ -16,11 +19,13 @@ interface Props {
  * profile's Credit Application card; this dialog only takes the SSNs, which
  * exist in this component's state for the one print and are gone on close.
  */
-export function CreditAppSheet({ customer, onGenerate, isGenerating, error, onClose }: Props) {
+export function CreditAppSheet({ customer, ssns, onSsnsChange, onGenerate, isGenerating, error, onClose }: Props) {
   const app = customer.creditApp ?? {};
   const joint = hasJointApplicant(app);
-  const [ssn, setSsn] = useState('');
-  const [coSsn, setCoSsn] = useState('');
+  const ssn = ssns.applicant ?? '';
+  const coSsn = ssns.coApplicant ?? '';
+  const setSsn = (v: string) => onSsnsChange({ ...ssns, applicant: v || undefined });
+  const setCoSsn = (v: string) => onSsnsChange({ ...ssns, coApplicant: v || undefined });
   const [show, setShow] = useState(false);
   const name = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || 'Customer';
   const coName = [app.coApplicant?.firstName, app.coApplicant?.lastName].filter(Boolean).join(' ') || 'Joint applicant';
@@ -42,7 +47,7 @@ export function CreditAppSheet({ customer, onGenerate, isGenerating, error, onCl
         </div>
 
         <p className="text-xs text-gray-500">
-          Fields come from the Credit Application card on the profile. Only the SSNs are entered here; they go into this one PDF and are never saved.
+          Fields come from the Credit Application card on the profile. The SSNs are held in memory while this customer is open and are never saved.
         </p>
 
         <SsnField label={`${name} · SSN`} value={ssn} onChange={setSsn} show={show} />

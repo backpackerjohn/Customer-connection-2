@@ -38,6 +38,7 @@ import { TradeInSection } from './profile/TradeInSection';
 import { TradeCheckInSection } from './profile/TradeCheckInSection';
 import { GoalsSection } from './profile/GoalsSection';
 import { CreditAppSection } from './profile/CreditAppSection';
+import { CreditSsns } from '../lib/creditApp';
 import { TimelineNotesSection } from './profile/TimelineNotesSection';
 
 interface Props {
@@ -87,6 +88,9 @@ interface Props {
   /** Shared payoff lender library + the signed-in dealer (for new library records). */
   lenders: Lender[];
   userId: string;
+  /** Credit application SSNs: App memory for the open customer only. */
+  creditSsns: CreditSsns;
+  onCreditSsnsChange: (ssns: CreditSsns) => void;
 }
 
 export function CustomerProfileView({
@@ -120,7 +124,9 @@ export function CustomerProfileView({
   onTradeEstimate,
   onOpenDocumentTray,
   lenders,
-  userId
+  userId,
+  creditSsns,
+  onCreditSsnsChange
 }: Props) {
   return (
     <div className="max-w-2xl mx-auto">
@@ -217,7 +223,7 @@ export function CustomerProfileView({
           />
         )}
         <GoalsSection customer={currentCustomer} onChange={onUpdateCustomer} />
-        <CreditAppSection customer={currentCustomer} onChange={onUpdateCustomer} />
+        <CreditAppSection customer={currentCustomer} onChange={onUpdateCustomer} ssns={creditSsns} onSsnsChange={onCreditSsnsChange} />
         <TimelineNotesSection 
           customer={currentCustomer}
           notes={notes}
